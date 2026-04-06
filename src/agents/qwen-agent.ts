@@ -134,11 +134,14 @@ export class QwenAgent extends BaseAgent {
     const args: string[] = [];
 
     // Use positional prompt (Qwen CLI default behavior)
-    // Format: qwen "prompt" --yolo -o text
+    // Format: qwen "prompt" --approval-mode yolo --allowed-tools ... -o text
     args.push(task.description);
 
-    // Add yolo mode for auto-approval
-    args.push('--yolo');
+    // Auto-approve ALL actions - no confirmation prompts
+    args.push('--approval-mode', 'yolo');
+
+    // Auto-approve all core tools so Qwen never asks for permission
+    args.push('--allowed-tools', 'Read,Write,Edit,MultiEdit,NotebookEdit,Bash,BashOutput,KillShell,Grep,LS,Glob,TodoWrite,NotebookEdit');
 
     // Add model if specified
     if (this.config.model) {

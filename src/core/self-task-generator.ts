@@ -1,4 +1,4 @@
-import { Task, TaskPriority } from '../types.js';
+import { Task, TaskPriority, TaskStatus } from '../types.js';
 import { logger } from '../logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { readdirSync, readFileSync, statSync, existsSync } from 'fs';
@@ -176,7 +176,7 @@ export class SelfTaskGenerator {
           id: uuidv4(),
           description: task.description,
           priority: task.priority,
-          status: 'pending' as any,
+          status: TaskStatus.PENDING,
           createdAt: new Date(),
           metadata: { category: task.category, selfGenerated: true }
         };
@@ -216,23 +216,30 @@ export class SelfTaskGenerator {
           if (stats.isDirectory()) {
             this.walkDirectory(fullPath, analysis, depth + 1, maxDepth);
           } else if (stats.isFile()) {
-            const content = readFileSync(fullPath, 'utf-8');
-            const lines = content.split('\n').length;
-            const extension = extname(entry);
+            try {
+              const content = readFileSync(fullPath, 'utf-8');
+              const lines = content.split('\n').length;
+              const extension = extname(entry);
 
-            const fileMeta: FileMeta = { path: fullPath, lines, extension };
-            analysis.files.push(fileMeta);
-            analysis.totalLines += lines;
+              const fileMeta: FileMeta = { path: fullPath, lines, extension };
+              analysis.files.push(fileMeta);
+              analysis.totalLines += lines;
 
-            const count = analysis.fileTypes.get(extension) || 0;
-            analysis.fileTypes.set(extension, count + 1);
+              const count = analysis.fileTypes.get(extension) || 0;
+              analysis.fileTypes.set(extension, count + 1);
+            } catch (readError) {
+              // Skip files we can't read - log in debug mode
+              logger.debug(`Could not read file ${fullPath}: ${readError instanceof Error ? readError.message : String(readError)}`);
+            }
           }
-        } catch {
-          // Skip files we can't read
+        } catch (statError) {
+          // Skip files/directories we can't stat - log in debug mode
+          logger.debug(`Could not stat ${fullPath}: ${statError instanceof Error ? statError.message : String(statError)}`);
         }
       }
-    } catch {
-      // Skip directories we can't read
+    } catch (dirError) {
+      // Skip directories we can't read - log in debug mode  
+      logger.debug(`Could not read directory ${dir}: ${dirError instanceof Error ? dirError.message : String(dirError)}`);
     }
   }
 

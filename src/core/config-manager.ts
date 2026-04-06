@@ -2,6 +2,7 @@ import { LoopConfig, AgentConfig, AgentType } from '../types.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../logger.js';
+import { statSync } from 'fs';
 
 const DEFAULT_CONFIG: Partial<LoopConfig> = {
   maxConcurrentTasks: 3,
@@ -14,10 +15,18 @@ const DEFAULT_CONFIG: Partial<LoopConfig> = {
   enableSelfTaskGeneration: true
 };
 
+/**
+ * Manages loading, saving, and validating Qwen Loop configuration.
+ * Provides defaults and helper methods for configuration management.
+ */
 export class ConfigManager {
   private configPath: string;
   private config: LoopConfig;
 
+  /**
+   * Create a new ConfigManager
+   * @param configPath - Optional path to configuration file (defaults to qwen-loop.config.json in CWD)
+   */
   constructor(configPath?: string) {
     this.configPath = configPath || join(process.cwd(), 'qwen-loop.config.json');
     this.config = this.loadConfig();
@@ -59,13 +68,17 @@ export class ConfigManager {
     };
   }
 
+  /**
+   * Save the current configuration to disk
+   * @throws Error if saving fails
+   */
   saveConfig(): void {
     try {
       const configDir = join(this.configPath, '..');
       if (!existsSync(configDir)) {
         mkdirSync(configDir, { recursive: true });
       }
-      
+
       writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
       logger.info(`Configuration saved to ${this.configPath}`);
     } catch (error) {
@@ -74,10 +87,18 @@ export class ConfigManager {
     }
   }
 
+  /**
+   * Get the current configuration
+   * @returns The current LoopConfig object
+   */
   getConfig(): LoopConfig {
     return this.config;
   }
 
+  /**
+   * Update the configuration with new values and save to disk
+   * @param updates - Partial configuration to merge with current config
+   */
   updateConfig(updates: Partial<LoopConfig>): void {
     this.config = {
       ...this.config,
@@ -86,12 +107,20 @@ export class ConfigManager {
     this.saveConfig();
   }
 
+  /**
+   * Add a new agent configuration to the config
+   * @param agentConfig - The agent configuration to add
+   */
   addAgent(agentConfig: AgentConfig): void {
     this.config.agents.push(agentConfig);
     this.saveConfig();
     logger.info(`Agent ${agentConfig.name} added to configuration`);
   }
 
+  /**
+   * Remove an agent configuration by name
+   * @param agentName - Name of the agent to remove
+   */
   removeAgent(agentName: string): void {
     const index = this.config.agents.findIndex(a => a.name === agentName);
     if (index !== -1) {
@@ -101,6 +130,10 @@ export class ConfigManager {
     }
   }
 
+  /**
+   * Get all agent configurations
+   * @returns Array of agent configurations
+   */
   getAgents(): AgentConfig[] {
     return this.config.agents;
   }
@@ -182,6 +215,11 @@ export class ConfigManager {
       errors.push('maxRetries must be non-negative');
     }
 
+    // Validate working directory exists
+    if (this.config.workingDirectory && !existsSync(this.config.workingDirectory)) {
+      errors.push(`Working directory does not exist: ${this.config.workingDirectory}`);
+    }
+
     // Validate agents
     for (const agent of this.config.agents) {
       if (!agent.name) {
@@ -189,6 +227,10 @@ export class ConfigManager {
       }
       if (!agent.type) {
         errors.push(`Agent ${agent.name} must have a type`);
+      }
+      // Validate agent working directory if specified
+      if (agent.workingDirectory && !existsSync(agent.workingDirectory)) {
+        errors.push(`Agent ${agent.name} working directory does not exist: ${agent.workingDirectory}`);
       }
     }
 

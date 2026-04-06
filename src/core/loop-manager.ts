@@ -2,9 +2,14 @@ import { ILoopManager, LoopStats, LoopConfig, Task, TaskStatus, TaskPriority, Ag
 import { AgentOrchestrator } from './orchestrator.js';
 import { TaskQueue } from './task-queue.js';
 import { SelfTaskGenerator } from './self-task-generator.js';
+import { gitCommitPush } from './git-utils.js';
 import { logger } from '../logger.js';
 import { v4 as uuidv4 } from 'uuid';
 
+/**
+ * Manages the autonomous agent loop, handling task scheduling,
+ * execution, and lifecycle management.
+ */
 export class LoopManager implements ILoopManager {
   private orchestrator: AgentOrchestrator;
   private taskQueue: TaskQueue;
@@ -20,6 +25,10 @@ export class LoopManager implements ILoopManager {
   private totalExecutionTime = 0;
   private loopIterationCount = 0;
 
+  /**
+   * Create a new LoopManager
+   * @param config - Configuration for the loop
+   */
   constructor(config: LoopConfig) {
     this.config = config;
     this.orchestrator = new AgentOrchestrator();
@@ -31,6 +40,9 @@ export class LoopManager implements ILoopManager {
     }
   }
 
+  /**
+   * Start the agent loop
+   */
   async start(): Promise<void> {
     if (this.isLoopRunning) {
       logger.warn('Loop is already running');
@@ -44,16 +56,21 @@ export class LoopManager implements ILoopManager {
 
     // Analyze project and generate initial tasks if self-task generation is enabled
     if (this.selfTaskGenerator) {
-      logger.info('Analyzing project and generating self-directed tasks...');
-      const analysis = this.selfTaskGenerator.analyzeProject();
-      logger.info(`Project analysis: ${analysis.files.length} files, ${analysis.totalLines} lines, complexity: ${analysis.complexity}`);
+      try {
+        logger.info('Analyzing project and generating self-directed tasks...');
+        const analysis = this.selfTaskGenerator.analyzeProject();
+        logger.info(`Project analysis: ${analysis.files.length} files, ${analysis.totalLines} lines, complexity: ${analysis.complexity}`);
 
-      // Generate and enqueue initial tasks
-      const tasks = this.selfTaskGenerator.generateTasks(analysis);
-      for (const taskDesc of tasks) {
-        this.addTask(taskDesc.description, taskDesc.priority, { category: taskDesc.category, selfGenerated: true });
+        // Generate and enqueue initial tasks
+        const tasks = this.selfTaskGenerator.generateTasks(analysis);
+        for (const taskDesc of tasks) {
+          this.addTask(taskDesc.description, taskDesc.priority, { category: taskDesc.category, selfGenerated: true });
+        }
+        logger.info(`Generated ${tasks.length} self-directed tasks`);
+      } catch (error) {
+        logger.error(`Failed to generate self-directed tasks: ${error instanceof Error ? error.message : String(error)}`);
+        // Continue without self-task generation
       }
-      logger.info(`Generated ${tasks.length} self-directed tasks`);
     }
 
     this.isLoopRunning = true;
@@ -72,16 +89,20 @@ export class LoopManager implements ILoopManager {
     this.runLoop();
   }
 
+  /**
+   * Stop the agent loop and clean up resources
+   */
   async stop(): Promise<void> {
     if (!this.isLoopRunning) {
       return;
     }
 
     logger.info('Stopping Qwen Loop...');
-    
+
     this.isLoopRunning = false;
     this.isLoopPaused = false;
-    
+
+    // Clear the interval to stop the loop
     if (this.loopInterval) {
       clearInterval(this.loopInterval);
       this.loopInterval = null;
@@ -89,10 +110,13 @@ export class LoopManager implements ILoopManager {
 
     // Cancel all running tasks
     await this.orchestrator.cancelAllTasks();
-    
+
     logger.info('Loop stopped');
   }
 
+  /**
+   * Pause the agent loop
+   */
   async pause(): Promise<void> {
     if (!this.isLoopRunning) {
       return;
@@ -100,15 +124,18 @@ export class LoopManager implements ILoopManager {
 
     logger.info('Pausing Qwen Loop...');
     this.isLoopPaused = true;
-    
+
     if (this.loopInterval) {
       clearInterval(this.loopInterval);
       this.loopInterval = null;
     }
-    
+
     logger.info('Loop paused');
   }
 
+  /**
+   * Resume the agent loop
+   */
   async resume(): Promise<void> {
     if (!this.isLoopRunning || !this.isLoopPaused) {
       return;
@@ -119,10 +146,18 @@ export class LoopManager implements ILoopManager {
     this.runLoop();
   }
 
+  /**
+   * Check if the loop is currently running
+   * @returns True if the loop is active and not paused
+   */
   isRunning(): boolean {
     return this.isLoopRunning && !this.isLoopPaused;
   }
 
+  /**
+   * Get statistics about the loop execution
+   * @returns Object containing loop statistics
+   */
   getStats(): LoopStats {
     const uptime = this.startTime ? Date.now() - this.startTime.getTime() : 0;
     const averageExecutionTime = this.completedTasksCount > 0
@@ -142,6 +177,13 @@ export class LoopManager implements ILoopManager {
     };
   }
 
+  /**
+   * Add a new task to the queue
+   * @param description - Human-readable description of the task
+   * @param priority - Priority level (defaults to MEDIUM)
+   * @param metadata - Optional metadata to attach to the task
+   * @returns The created Task object
+   */
   addTask(description: string, priority: TaskPriority = TaskPriority.MEDIUM, metadata?: Record<string, any>): Task {
     const task: Task = {
       id: uuidv4(),
@@ -158,14 +200,26 @@ export class LoopManager implements ILoopManager {
     return task;
   }
 
+  /**
+   * Get the task queue instance
+   * @returns The TaskQueue instance
+   */
   getTaskQueue(): TaskQueue {
     return this.taskQueue;
   }
 
+  /**
+   * Get the orchestrator instance
+   * @returns The AgentOrchestrator instance
+   */
   getOrchestrator(): AgentOrchestrator {
     return this.orchestrator;
   }
 
+  /**
+   * Get the current configuration
+   * @returns The LoopConfig object
+   */
   getConfig(): LoopConfig {
     return this.config;
   }
@@ -250,6 +304,15 @@ export class LoopManager implements ILoopManager {
         logger.info(`Task ${task.id} completed successfully in ${result.executionTime}ms`, {
           task: task.id
         });
+
+        // Auto commit and push after each task
+        const commitMsg = `chore(ai): ${task.description.slice(0, 72)}`;
+        const gitResult = await gitCommitPush(commitMsg, this.config.workingDirectory);
+        if (gitResult.success) {
+          logger.info(`Changes committed and pushed: ${commitMsg}`, { task: task.id });
+        } else {
+          logger.warn(`Git push failed: ${gitResult.output}`, { task: task.id });
+        }
       } else {
         this.failedTasksCount++;
         this.totalExecutionTime += result.executionTime;

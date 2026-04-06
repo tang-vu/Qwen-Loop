@@ -59,102 +59,107 @@ program
   .option('-c, --config <path>', 'Configuration file path')
   .option('--auto-start', 'Automatically start processing tasks')
   .action(async (opts) => {
-    const configManager = new ConfigManager(opts.config);
-    const config = configManager.getConfig();
+    try {
+      const configManager = new ConfigManager(opts.config);
+      const config = configManager.getConfig();
 
-    // Set log level
-    setLogLevel(config.logLevel);
+      // Set log level
+      setLogLevel(config.logLevel);
 
-    // Validate configuration
-    const errors = configManager.validateConfig();
-    if (errors.length > 0) {
-      console.error('\n⚠ Configuration warnings/errors:');
-      errors.forEach(err => console.error(`  - ${err}`));
-      console.log('\nContinuing anyway...\n');
-    }
-
-    // Handle graceful shutdown
-    const setupShutdown = async (stopFn: () => Promise<void>) => {
-      process.on('SIGINT', async () => {
-        console.log('\n\nShutting down...');
-        await stopFn();
-        process.exit(0);
-      });
-
-      process.on('SIGTERM', async () => {
-        console.log('\n\nShutting down...');
-        await stopFn();
-        process.exit(0);
-      });
-    };
-
-    // Check if multi-project mode
-    if (config.projects && config.projects.length > 0) {
-      console.log('\n🌐 Multi-project mode detected\n');
-
-      const multiManager = new MultiProjectManager(config);
-      await multiManager.initialize();
-      await multiManager.start();
-
-      // Print status every 30 seconds
-      const statusInterval = setInterval(() => {
-        if (!multiManager.isRunningStatus()) {
-          clearInterval(statusInterval);
-          return;
-        }
-        console.log(multiManager.getAllStats());
-      }, 30000);
-
-      await setupShutdown(() => multiManager.stop());
-
-      // Keep process alive
-      await new Promise(() => {});
-    } else {
-      // Single project mode
-      const loopManager = new LoopManager(config);
-
-      // Create and register agents
-      for (const agentConfig of config.agents) {
-        let agent;
-
-        switch (agentConfig.type) {
-          case AgentType.QWEN:
-            agent = new QwenAgent(agentConfig);
-            break;
-          case AgentType.CUSTOM:
-            agent = new CustomAgent(agentConfig);
-            break;
-          default:
-            logger.error(`Unknown agent type: ${agentConfig.type}`);
-            continue;
-        }
-
-        loopManager.getOrchestrator().registerAgent(agent);
+      // Validate configuration
+      const errors = configManager.validateConfig();
+      if (errors.length > 0) {
+        console.error('\n⚠ Configuration warnings/errors:');
+        errors.forEach(err => console.error(`  - ${err}`));
+        console.log('\nContinuing anyway...\n');
       }
 
-      logger.info(`Registered ${config.agents.length} agents`);
+      // Handle graceful shutdown
+      const setupShutdown = async (stopFn: () => Promise<void>) => {
+        process.on('SIGINT', async () => {
+          console.log('\n\nShutting down...');
+          await stopFn();
+          process.exit(0);
+        });
 
-      // Start the loop
-      await loopManager.start();
+        process.on('SIGTERM', async () => {
+          console.log('\n\nShutting down...');
+          await stopFn();
+          process.exit(0);
+        });
+      };
 
-      console.log('\n🚀 Qwen Loop is running...');
-      console.log('Press Ctrl+C to stop\n');
+      // Check if multi-project mode
+      if (config.projects && config.projects.length > 0) {
+        console.log('\n🌐 Multi-project mode detected\n');
 
-      // Print status every 30 seconds
-      const statusInterval = setInterval(() => {
-        if (!loopManager.isRunning()) {
-          clearInterval(statusInterval);
-          return;
+        const multiManager = new MultiProjectManager(config);
+        await multiManager.initialize();
+        await multiManager.start();
+
+        // Print status every 30 seconds
+        const statusInterval = setInterval(() => {
+          if (!multiManager.isRunningStatus()) {
+            clearInterval(statusInterval);
+            return;
+          }
+          console.log(multiManager.getAllStats());
+        }, 30000);
+
+        await setupShutdown(() => multiManager.stop());
+
+        // Keep process alive
+        await new Promise(() => {});
+      } else {
+        // Single project mode
+        const loopManager = new LoopManager(config);
+
+        // Create and register agents
+        for (const agentConfig of config.agents) {
+          let agent;
+
+          switch (agentConfig.type) {
+            case AgentType.QWEN:
+              agent = new QwenAgent(agentConfig);
+              break;
+            case AgentType.CUSTOM:
+              agent = new CustomAgent(agentConfig);
+              break;
+            default:
+              logger.error(`Unknown agent type: ${agentConfig.type}`);
+              continue;
+          }
+
+          loopManager.getOrchestrator().registerAgent(agent);
         }
-        const stats = loopManager.getStats();
-        console.log('\n' + loopManager.getAgentStatusReport());
-        console.log(loopManager.getTaskQueueStats());
-      }, 30000);
 
-      await setupShutdown(() => loopManager.stop());
+        logger.info(`Registered ${config.agents.length} agents`);
 
-      // Keep the process alive
-      await new Promise(() => {});
+        // Start the loop
+        await loopManager.start();
+
+        console.log('\n🚀 Qwen Loop is running...');
+        console.log('Press Ctrl+C to stop\n');
+
+        // Print status every 30 seconds
+        const statusInterval = setInterval(() => {
+          if (!loopManager.isRunning()) {
+            clearInterval(statusInterval);
+            return;
+          }
+          const stats = loopManager.getStats();
+          console.log('\n' + loopManager.getAgentStatusReport());
+          console.log(loopManager.getTaskQueueStats());
+        }, 30000);
+
+        await setupShutdown(() => loopManager.stop());
+
+        // Keep the process alive
+        await new Promise(() => {});
+      }
+    } catch (error) {
+      logger.error(`Failed to start Qwen Loop: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(1);
     }
   });
 
@@ -164,17 +169,22 @@ program
   .option('-p, --priority <priority>', 'Task priority (low, medium, high, critical)', 'medium')
   .option('-c, --config <path>', 'Configuration file path')
   .action(async (description, opts) => {
-    const priorityMap: Record<string, TaskPriority> = {
-      low: TaskPriority.LOW,
-      medium: TaskPriority.MEDIUM,
-      high: TaskPriority.HIGH,
-      critical: TaskPriority.CRITICAL
-    };
-    
-    const priority = priorityMap[opts.priority.toLowerCase()] || TaskPriority.MEDIUM;
-    
-    console.log(`\n✓ Task added with ${priority} priority:`);
-    console.log(`  ${description}\n`);
+    try {
+      const priorityMap: Record<string, TaskPriority> = {
+        low: TaskPriority.LOW,
+        medium: TaskPriority.MEDIUM,
+        high: TaskPriority.HIGH,
+        critical: TaskPriority.CRITICAL
+      };
+
+      const priority = priorityMap[opts.priority.toLowerCase()] || TaskPriority.MEDIUM;
+
+      console.log(`\n✓ Task added with ${priority} priority:`);
+      console.log(`  ${description}\n`);
+    } catch (error) {
+      logger.error(`Failed to add task: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(1);
+    }
   });
 
 program

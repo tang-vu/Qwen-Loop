@@ -213,35 +213,55 @@ export class MultiProjectManager {
 
     logger.info(`\n📁 Working on project: ${projectName}`);
 
-    // Start the project's loop
-    await manager.start();
+    try {
+      // Start the project's loop
+      await manager.start();
 
-    // Wait for the project to complete its max iterations or stop
-    // Check every 5 seconds
-    const checkInterval = setInterval(async () => {
-      if (!this.isRunning) {
-        clearInterval(checkInterval);
-        return;
-      }
-
-      const isProjectRunning = manager.isRunning();
-      if (!isProjectRunning) {
-        clearInterval(checkInterval);
-        logger.info(`Project "${projectName}" completed its tasks`);
-
-        // Move to next project
-        this.currentIndex = (this.currentIndex + 1) % this.projectNames.length;
-
-        if (this.currentIndex === 0) {
-          logger.info('\n🔄 Completed all projects, starting from beginning...');
+      // Wait for the project to complete its max iterations or stop
+      // Check every 5 seconds
+      const checkInterval = setInterval(async () => {
+        if (!this.isRunning) {
+          clearInterval(checkInterval);
+          return;
         }
 
-        // Small delay before next project
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        try {
+          const isProjectRunning = manager.isRunning();
+          if (!isProjectRunning) {
+            clearInterval(checkInterval);
+            logger.info(`Project "${projectName}" completed its tasks`);
 
-        // Start next project
-        await this.processCurrentProject();
+            // Move to next project
+            this.currentIndex = (this.currentIndex + 1) % this.projectNames.length;
+
+            if (this.currentIndex === 0) {
+              logger.info('\n🔄 Completed all projects, starting from beginning...');
+            }
+
+            // Small delay before next project
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Start next project
+            await this.processCurrentProject();
+          }
+        } catch (error) {
+          logger.error(`Error checking project status: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }, 5000);
+    } catch (error) {
+      logger.error(`Failed to start project "${projectName}": ${error instanceof Error ? error.message : String(error)}`);
+      // Move to next project even if this one failed
+      this.currentIndex = (this.currentIndex + 1) % this.projectNames.length;
+      
+      if (this.currentIndex === 0) {
+        logger.info('\n🔄 Completed all projects, starting from beginning...');
       }
-    }, 5000);
+
+      // Small delay before next project
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Start next project
+      await this.processCurrentProject();
+    }
   }
 }

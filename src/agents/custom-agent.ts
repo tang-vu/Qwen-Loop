@@ -246,16 +246,34 @@ export class CustomAgent extends BaseAgent {
     let match;
     while ((match = modifiedPattern.exec(output)) !== null) {
       const file = match[1];
-      if (!filesModified.includes(file)) {
+      if (file && !filesModified.includes(file)) {
         filesModified.push(file);
       }
     }
 
     while ((match = createdPattern.exec(output)) !== null) {
       const file = match[1];
-      if (!filesCreated.includes(file)) {
+      if (file && !filesCreated.includes(file)) {
         filesCreated.push(file);
       }
     }
+  }
+
+  /**
+   * Get the working directory configured for this agent
+   *
+   * @returns The absolute or relative path to the working directory
+   */
+  getWorkingDirectory(): string {
+    return this.workingDir;
+  }
+
+  /**
+   * Get the CLI command configured for this agent
+   *
+   * @returns The command name or path to the CLI executable
+   */
+  getCommand(): string {
+    return this.command;
   }
 }

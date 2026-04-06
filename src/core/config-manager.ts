@@ -108,7 +108,11 @@ export class ConfigManager {
 
   /**
    * Save the current configuration to disk
-   * @throws Error if saving fails
+   *
+   * Writes the configuration to the configured file path. Creates parent
+   * directories if they don't exist.
+   *
+   * @throws Error if the file cannot be written (e.g., permission denied, disk full)
    */
   saveConfig(): void {
     try {
@@ -122,12 +126,13 @@ export class ConfigManager {
         operation: 'config.save'
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error(`❌ Failed to save configuration`, {
         operation: 'config.error',
         configPath: this.configPath,
-        error: error instanceof Error ? error : new Error(String(error))
+        error: error instanceof Error ? error : new Error(errorMessage)
       });
-      throw new Error(`Failed to save configuration: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to save configuration to '${this.configPath}': ${errorMessage}`);
     }
   }
 

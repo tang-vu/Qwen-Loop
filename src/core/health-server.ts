@@ -91,22 +91,29 @@ export class HealthServer {
 
   /**
    * Handle incoming HTTP requests and route to appropriate handlers
+   *
+   * @param req - The incoming HTTP request
+   * @param res - The HTTP response object
    */
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
     try {
       const requestUrl = req.url ?? '/';
       let url: URL;
-      
+
       try {
         url = new URL(requestUrl, `http://${this.host}:${this.port}`);
       } catch (urlError) {
         // Malformed URL - return 400 Bad Request instead of 500
-        logger.debug(`Malformed URL in health server request: ${requestUrl}`, { error: urlError instanceof Error ? urlError.message : String(urlError) });
+        const errorMessage = urlError instanceof Error ? urlError.message : String(urlError);
+        logger.debug(`Malformed URL in health server request: ${requestUrl}`, {
+          operation: 'health.request',
+          error: errorMessage
+        });
         res.writeHead(400, { 'Content-Type': 'text/plain' });
         res.end('Bad Request: Invalid URL');
         return;
       }
-      
+
       const path = url.pathname;
 
       // Set CORS headers
@@ -174,6 +181,9 @@ export class HealthServer {
 
   /**
    * Handle full health check request, returning HTML or JSON based on Accept header
+   *
+   * @param req - The incoming HTTP request
+   * @param res - The HTTP response object
    */
   private handleFullHealthReport(req: IncomingMessage, res: ServerResponse): void {
     // Check Accept header to determine response format

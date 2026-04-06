@@ -410,10 +410,10 @@ export class HealthChecker {
    * Collect current system resource usage metrics including memory, CPU, and heap.
    *
    * Platform-specific CPU measurement:
-   * - Windows: Uses wmic command
+   * - Windows: Uses wmic command with fallback to estimation
    * - Unix/Mac: Uses top command with fallback to estimation
    *
-   * Includes fallback CPU estimation if platform-specific commands fail.
+   * Includes comprehensive error handling for command failures.
    *
    * @returns A ResourceUsage object with current system metrics
    */
@@ -424,21 +424,33 @@ export class HealthChecker {
     const usedMemory = totalMemory - freeMemory;
     const memoryUsagePercent = (usedMemory / totalMemory) * 100;
 
-    // Get CPU usage (platform-specific)
+    // Get CPU usage (platform-specific with error handling)
     let cpuUsage = 0;
     try {
       if (platform() === 'win32') {
         // Windows: use wmic
-        const output = execSync('wmic cpu get loadpercentage', { encoding: 'utf8', timeout: 5000 });
+        const output = execSync('wmic cpu get loadpercentage', {
+          encoding: 'utf8',
+          timeout: 5000,
+          killSignal: 'SIGTERM'
+        });
         const match = output.match(/(\d+)/);
         cpuUsage = match ? parseInt(match[1], 10) : 0;
       } else {
         // Unix: use top
-        const output = execSync("top -l 1 | grep 'CPU usage' | awk '{print $3}'", { encoding: 'utf8', timeout: 5000 });
+        const output = execSync("top -l 1 | grep 'CPU usage' | awk '{print $3}'", {
+          encoding: 'utf8',
+          timeout: 5000,
+          killSignal: 'SIGTERM'
+        });
         cpuUsage = parseFloat(output) || 0;
       }
     } catch (err) {
-      logger.debug('Failed to get system CPU usage, using fallback estimation', { error: err instanceof Error ? err.message : String(err) });
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      logger.debug('Failed to get system CPU usage, using fallback estimation', {
+        operation: 'health.resource',
+        error: errorMessage
+      });
       // Fallback: estimate from process CPU usage
       cpuUsage = this.estimateCpuUsage();
     }

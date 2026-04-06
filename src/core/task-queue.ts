@@ -210,7 +210,7 @@ export class TaskQueue implements ITaskQueue {
     }
     const task = this.tasks.get(taskId);
     if (!task) {
-      throw new Error(`TaskQueue.updateTaskStatus: no task found with id "${taskId}")`);
+      throw new Error(`TaskQueue.updateTaskStatus: no task found with id "${taskId}"`);
     }
     task.status = status;
     logger.debug(`🔄 Task status updated`, { 

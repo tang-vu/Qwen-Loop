@@ -228,11 +228,17 @@ By Status:
 Get comprehensive system health status:
 
 ```bash
-# Text format (human-readable)
+# Static report (based on config and current system state)
 npm start -- health
+
+# Live metrics from running instance
+npm start -- health --live
 
 # JSON format (for automation/monitoring tools)
 npm start -- health --json
+
+# Custom host/port
+npm start -- health --live --host localhost --port 8080
 ```
 
 **Health report includes:**
@@ -241,6 +247,16 @@ npm start -- health --json
 - 💻 **Resource Usage**: CPU, memory, heap usage, active processes
 - ⚙️ **Configuration**: Current settings summary
 - ⚠️ **Warnings/Errors**: Detected issues and anomalies
+
+**Health CLI Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--live` | Fetch live metrics from running instance | - |
+| `--host <host>` | Health server hostname | `localhost` |
+| `--port <port>` | Health server port | `3100` |
+| `--json` | Output in JSON format | - |
+| `-c, --config <path>` | Path to configuration file | `./qwen-loop.config.json` |
 
 ### HTTP Health Endpoint (Optional)
 
@@ -258,6 +274,10 @@ npm start -- start --health-port 3100
 | `GET /health/json` | JSON health report | JSON object |
 | `GET /health/live` | Simple liveness check | `{"status": "alive"}` |
 | `GET /health/ready` | Readiness check (200 if ready, 503 if not) | JSON status |
+| `GET /health/metrics` | Detailed metrics (throughput, resources, config) | JSON object |
+| `GET /health/agents` | Detailed agent status and health | JSON object |
+| `GET /health/throughput` | Task throughput and priority breakdown | JSON object |
+| `GET /health/resources` | System resource usage metrics | JSON object |
 
 **Example usage:**
 
@@ -267,6 +287,15 @@ curl http://localhost:3100/health/live
 
 # Get full health report in JSON
 curl http://localhost:3100/health/json
+
+# Get detailed agent status
+curl http://localhost:3100/health/agents
+
+# Get task throughput metrics
+curl http://localhost:3100/health/throughput
+
+# Get resource usage
+curl http://localhost:3100/health/resources
 
 # View HTML dashboard in browser
 open http://localhost:3100/health

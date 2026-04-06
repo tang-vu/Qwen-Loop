@@ -34,10 +34,11 @@ export class AgentOrchestrator implements IAgentOrchestrator {
     if (agent) {
       // Cancel any running tasks
       agent.cancelTask().catch((error) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`⚠️ Error cancelling task during agent removal`, {
           operation: 'orchestrator.cleanup',
           agent: agent.name,
-          error
+          error: errorMessage
         });
       });
 
@@ -50,9 +51,9 @@ export class AgentOrchestrator implements IAgentOrchestrator {
         }
       }
 
-      logger.debug(`🗑️ Agent removed: ${agent.name}`, { 
+      logger.debug(`🗑️ Agent removed: ${agent.name}`, {
         operation: 'orchestrator.agent',
-        agent: agent.name 
+        agent: agent.name
       });
     }
   }
@@ -113,28 +114,44 @@ export class AgentOrchestrator implements IAgentOrchestrator {
   }
 
   /**
-   * Get an agent by its ID
+   * Retrieve an agent by its unique identifier
+   *
    * @param agentId - The unique identifier of the agent
    * @returns The agent instance if found, undefined otherwise
    */
   getAgentById(agentId: string): IAgent | undefined {
+    if (!agentId || typeof agentId !== 'string') {
+      logger.warn('Attempted to get agent with invalid ID', {
+        operation: 'orchestrator.get',
+        agentId
+      });
+      return undefined;
+    }
     return this.agents.get(agentId);
   }
 
   /**
-   * Get the agent ID assigned to a specific task
+   * Retrieve the agent ID assigned to a specific task
+   *
    * @param taskId - The unique identifier of the task
    * @returns The agent ID if assigned, undefined otherwise
    */
   getTaskAssignment(taskId: string): string | undefined {
+    if (!taskId || typeof taskId !== 'string') {
+      return undefined;
+    }
     return this.taskAssignments.get(taskId);
   }
 
   /**
    * Remove a task assignment
+   *
    * @param taskId - The unique identifier of the task
    */
   removeTaskAssignment(taskId: string): void {
+    if (!taskId || typeof taskId !== 'string') {
+      return;
+    }
     this.taskAssignments.delete(taskId);
   }
 
@@ -200,10 +217,11 @@ export class AgentOrchestrator implements IAgentOrchestrator {
       try {
         await agent.cancelTask();
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`❌ Error cancelling task during bulk cancel`, {
           operation: 'orchestrator.cleanup',
           agent: agent.name,
-          error
+          error: errorMessage
         });
       }
     });

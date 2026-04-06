@@ -333,8 +333,16 @@ export class MultiProjectManager {
     return this.projectManagers.get(name);
   }
 
-  // Private methods
-
+  /**
+   * Build a complete LoopConfig for a project by merging project-specific and global settings.
+   *
+   * Project-specific values (agents, maxConcurrentTasks, maxLoopIterations, workingDirectory)
+   * override global values when provided. All other values come from the global configuration.
+   *
+   * @param projectConfig - The project configuration containing project-specific overrides.
+   * @returns A complete LoopConfig object with all required fields populated.
+   * @throws Error if projectConfig is missing required fields (name, workingDirectory).
+   */
   private buildProjectConfig(projectConfig: ProjectConfig): LoopConfig {
     if (!projectConfig.workingDirectory) {
       throw new Error(`Project "${projectConfig.name}" is missing a working directory.`);
@@ -353,6 +361,16 @@ export class MultiProjectManager {
     };
   }
 
+  /**
+   * Process tasks for the current project in the round-robin cycle.
+   *
+   * Starts the LoopManager for the current project, waits for it to complete
+   * (reaching max iterations or being stopped), then advances to the next project.
+   * Uses a polling interval to check project status every 5 seconds.
+   *
+   * Handles errors gracefully by logging them and advancing to the next project
+   * rather than halting the entire multi-project loop.
+   */
   private async processCurrentProject(): Promise<void> {
     if (!this.isRunning || this.projectNames.length === 0) {
       return;

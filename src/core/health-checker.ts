@@ -134,6 +134,14 @@ export class HealthChecker {
     if (!success) counts.failed++;
     this.agentTaskCounts.set(agentId, counts);
     this.agentLastTaskTime.set(agentId, Date.now());
+    
+    // Also update global counters for accurate throughput calculation
+    if (success) {
+      this.completedTasksCount++;
+      this.totalExecutionTime += executionTime;
+    } else {
+      this.failedTasksCount++;
+    }
   }
 
   /**
@@ -221,7 +229,8 @@ export class HealthChecker {
     // Overall status
     const statusIcon = report.status === 'healthy' ? '🟢' : report.status === 'degraded' ? '🟡' : '🔴';
     output += `${statusIcon} Overall Status: ${report.status.toUpperCase()}\n`;
-    output += `📅 Timestamp: ${report.timestamp.toISOString()}\n`;
+    const timestamp = report.timestamp instanceof Date ? report.timestamp : new Date(report.timestamp);
+    output += `📅 Timestamp: ${timestamp.toISOString()}\n`;
     output += `⏱️  Uptime: ${this.formatUptime(report.uptime)}\n\n`;
 
     // Summary
@@ -321,6 +330,17 @@ export class HealthChecker {
 
   // Private methods
 
+  /**
+   * Collect health status for all registered agents.
+   *
+   * Evaluates each agent's health based on status, task failure rates, and
+   * time since last task completion. Populates warnings and errors arrays
+   * with specific issues found.
+   *
+   * @param warnings - Array to append warning messages to (mutable)
+   * @param errors - Array to append error messages to (mutable)
+   * @returns Array of AgentHealthStatus objects for each registered agent
+   */
   private getAgentHealth(warnings: string[], errors: string[]): AgentHealthStatus[] {
     return this.agents.map(agent => {
       const status = agent.getStatus();
@@ -366,6 +386,17 @@ export class HealthChecker {
     });
   }
 
+  /**
+   * Collect current system resource usage metrics including memory, CPU, and heap.
+   *
+   * Platform-specific CPU measurement:
+   * - Windows: Uses wmic command
+   * - Unix/Mac: Uses top command with fallback to estimation
+   *
+   * Includes fallback CPU estimation if platform-specific commands fail.
+   *
+   * @returns A ResourceUsage object with current system metrics
+   */
   private getResourceUsage(): ResourceUsage {
     const memUsage = process.memoryUsage();
     const totalMemory = os.totalmem();
@@ -426,11 +457,11 @@ export class HealthChecker {
 
     const startUsage = process.cpuUsage();
     const start = Date.now();
-    
+
     // Short measurement window (10ms instead of 50ms)
     const measureDurationMs = 10;
     const end = start + measureDurationMs;
-    
+
     // Minimal busy-wait with reduced duration
     while (Date.now() < end) {
       // Tight loop for minimal measurement window
@@ -440,14 +471,23 @@ export class HealthChecker {
     const elapsed = Date.now() - start;
     const totalCpuTime = (endUsage.user + endUsage.system) / 1000; // Convert microseconds to ms
     const cpuPercent = elapsed > 0 ? (totalCpuTime / elapsed) * 100 : 0;
-    
+
     // Cache the result
     this.lastCpuUsage = Math.min(cpuPercent, 100);
     this.lastCpuCheck = now;
-    
+
     return this.lastCpuUsage;
   }
 
+  /**
+   * Calculate task throughput metrics from accumulated statistics.
+   *
+   * Computes rates and averages including tasks per minute, error rates,
+   * and success rates. Handles edge cases where no tasks have been completed
+   * to prevent division by zero.
+   *
+   * @returns A TaskThroughput object with current task execution metrics.
+   */
   private getTaskThroughput(): TaskThroughput {
     const totalTasks = this.completedTasksCount + this.failedTasksCount;
     const uptime = this.loopStartTime ? (Date.now() - this.loopStartTime.getTime()) / 1000 : 0;
@@ -474,6 +514,14 @@ export class HealthChecker {
     };
   }
 
+  /**
+   * Calculate priority and status breakdown from current task queue.
+   *
+   * Counts tasks in each priority level (CRITICAL, HIGH, MEDIUM, LOW)
+   * and status (PENDING, RUNNING, COMPLETED, FAILED, CANCELLED).
+   *
+   * @returns A PriorityBreakdown object with task distribution counts.
+   */
   private getPriorityBreakdown(): PriorityBreakdown {
     const byPriority: Record<TaskPriority, number> = {
       [TaskPriority.CRITICAL]: 0,
@@ -498,6 +546,21 @@ export class HealthChecker {
     return { byPriority, byStatus };
   }
 
+  /**
+   * Determine overall system health status based on collected metrics.
+   *
+   * Evaluates multiple thresholds:
+   * - Unhealthy: errors present, all agents unhealthy, memory >95%, error rate >50%
+   * - Degraded: warnings present, some agents unhealthy, memory >80%, error rate >20%, heap >90%
+   * - Healthy: all other cases
+   *
+   * @param agents - Array of agent health statuses
+   * @param resources - System resource usage metrics
+   * @param throughput - Task throughput statistics
+   * @param warnings - Accumulated warning messages
+   * @param errors - Accumulated error messages
+   * @returns Overall system status: 'healthy', 'degraded', or 'unhealthy'
+   */
   private determineOverallStatus(
     agents: AgentHealthStatus[],
     resources: ResourceUsage,
@@ -521,6 +584,18 @@ export class HealthChecker {
     return 'healthy';
   }
 
+  /**
+   * Generate a concise one-line summary of system health.
+   *
+   * Includes agent health count, task completion count, success rate,
+   * and memory usage percentage in a pipe-separated format.
+   *
+   * @param status - Overall system status (unused but kept for API consistency)
+   * @param agents - Array of agent health statuses
+   * @param throughput - Task throughput statistics
+   * @param resources - System resource usage metrics
+   * @returns A formatted summary string
+   */
   private generateSummary(
     status: 'healthy' | 'degraded' | 'unhealthy',
     agents: AgentHealthStatus[],
@@ -537,6 +612,15 @@ export class HealthChecker {
     return parts.join(' | ');
   }
 
+  /**
+   * Format uptime duration from milliseconds to human-readable string.
+   *
+   * Converts milliseconds to the most appropriate unit:
+   * days (if >24h), hours (if >1h), minutes (if >1m), or seconds.
+   *
+   * @param ms - Duration in milliseconds
+   * @returns Formatted string like "5d 3h", "2h 15m", "45m 30s", or "120s"
+   */
   private formatUptime(ms: number): string {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);

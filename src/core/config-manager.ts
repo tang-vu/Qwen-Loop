@@ -133,9 +133,17 @@ export class ConfigManager {
 
   /**
    * Update the configuration with new values and save to disk
-   * @param updates - Partial configuration to merge with current config
+   *
+   * Merges the provided updates with the current configuration and persists
+   * the result to the configuration file. Updates are applied shallowly.
+   *
+   * @param updates - Partial configuration object to merge with current config
+   * @throws Error if saving the configuration fails
    */
   updateConfig(updates: Partial<LoopConfig>): void {
+    if (!updates || typeof updates !== 'object') {
+      throw new Error('Configuration updates must be a valid object');
+    }
     this.config = {
       ...this.config,
       ...updates
@@ -145,9 +153,17 @@ export class ConfigManager {
 
   /**
    * Add a new agent configuration to the config
+   *
+   * Appends the agent to the configuration's agents array and persists
+   * the changes to disk.
+   *
    * @param agentConfig - The agent configuration to add
+   * @throws Error if agentConfig is invalid or saving fails
    */
   addAgent(agentConfig: AgentConfig): void {
+    if (!agentConfig || !agentConfig.name || !agentConfig.type) {
+      throw new Error('Agent configuration must include name and type');
+    }
     this.config.agents.push(agentConfig);
     this.saveConfig();
     logger.debug(`➕ Agent added to configuration: ${agentConfig.name}`, {
@@ -158,18 +174,25 @@ export class ConfigManager {
 
   /**
    * Remove an agent configuration by name
+   *
+   * Finds and removes the first agent matching the provided name, then
+   * persists the changes to disk.
+   *
    * @param agentName - Name of the agent to remove
+   * @returns True if an agent was found and removed, false otherwise
    */
-  removeAgent(agentName: string): void {
+  removeAgent(agentName: string): boolean {
     const index = this.config.agents.findIndex(a => a.name === agentName);
     if (index !== -1) {
-      this.config.agents.splice(index, 1);
+      const removed = this.config.agents.splice(index, 1)[0];
       this.saveConfig();
       logger.debug(`➖ Agent removed from configuration: ${agentName}`, {
         operation: 'config.agent',
         agent: agentName
       });
+      return true;
     }
+    return false;
   }
 
   /**

@@ -42,15 +42,17 @@ export abstract class BaseAgent implements IAgent {
   /**
    * Creates a new BaseAgent instance.
    *
+   * Validates the configuration and initializes the agent's identity.
+   *
    * @param config - Configuration object defining agent properties including name and type
-   * @throws Error if config is null or undefined
+   * @throws Error if config is null, undefined, or missing required fields
    */
   constructor(config: AgentConfig) {
     if (!config) {
       throw new Error('Agent configuration is required');
     }
-    if (!config.name) {
-      throw new Error('Agent name is required in configuration');
+    if (!config.name || typeof config.name !== 'string' || config.name.trim().length === 0) {
+      throw new Error('Agent name is required in configuration and must be a non-empty string');
     }
     if (!config.type) {
       throw new Error('Agent type is required in configuration');
@@ -196,11 +198,14 @@ export abstract class BaseAgent implements IAgent {
 
       this.abortController.abort();
 
-      if (this.currentTask) {
+      // Wait a tick for the abort signal to propagate
+      await new Promise(resolve => setImmediate(resolve));
+
+      if (this.currentTask && this.currentTask.status !== TaskStatus.CANCELLED) {
         this.currentTask.status = TaskStatus.CANCELLED;
-        this.currentTask = null;
       }
 
+      this.currentTask = null;
       this.status = AgentStatus.IDLE;
     }
   }

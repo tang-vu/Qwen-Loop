@@ -16,7 +16,7 @@ import { confirm, input, select } from '@inquirer/prompts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
+const packageJson: { version: string } = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
 
 // Track if color output should be disabled
 let enableColors = true;
@@ -176,6 +176,7 @@ function getCommandExamples(command: string): string {
     'start': [
       `${gray('# Start with defaults')} → ${cmd('qwen-loop start')}`,
       `${gray('# With health check')} → ${cmd('qwen-loop start --health-port 8080')}`,
+      `${gray('# Check health')} → ${cmd('qwen-loop health --live --port 8080')}`,
       `${gray('# Custom config file')} → ${cmd('qwen-loop start --config my-config.json')}`,
     ],
     'add-task': [
@@ -188,7 +189,9 @@ function getCommandExamples(command: string): string {
     ],
     'health': [
       `${gray('# Check health')} → ${cmd('qwen-loop health')}`,
+      `${gray('# Live metrics')} → ${cmd('qwen-loop health --live')}`,
       `${gray('# JSON for scripts')} → ${cmd('qwen-loop health --json')}`,
+      `${gray('# Custom port')} → ${cmd('qwen-loop health --port 8080')}`,
     ],
     'config': [
       `${gray('# Show config')} → ${cmd('qwen-loop config')}`,
@@ -952,64 +955,91 @@ program
   .description('Show system health status including agents, tasks, and resources')
   .option('-c, --config <path>', 'Path to configuration file')
   .option('--json', 'Output in JSON format for scripts')
+  .option('--host <host>', 'Health server hostname (default: localhost)', 'localhost')
+  .option('--port <port>', 'Health server port (default: 3100)', '3100')
+  .option('--live', 'Fetch live metrics from running instance')
   .addHelpText('after', () => {
     const examples = getCommandExamples('health');
-    return enableColors 
+    return enableColors
       ? `\n${chalk.bold('📝 Examples:')}\n  ${examples}\n`
       : `\n📝 Examples:\n  ${examples}\n`;
   })
   .action(async (opts) => {
     try {
-      const { HealthChecker } = await import('./core/health-checker.js');
-      const configManager = new ConfigManager(opts.config);
-
-      if (!existsSync(configManager['configPath'])) {
-        displayError(
-          'No configuration file found',
-          'Run "qwen-loop init" to create a configuration file first'
-        );
-        process.exit(1);
-      }
-
-      const config = configManager.getConfig();
-
-      const healthChecker = new HealthChecker();
-
-      // Update with config info
-      healthChecker.updateLoopStats({
-        maxConcurrentTasks: config.maxConcurrentTasks,
-        loopInterval: config.loopInterval,
-        maxRetries: config.maxRetries,
-        workingDirectory: config.workingDirectory
-      });
-
-      // Since we can't access a running instance from CLI, show a note
       console.log(enableColors ? `\n${chalk.bold.cyan('📊 Qwen Loop Health Check')}` : '\n📊 Qwen Loop Health Check');
       console.log(enableColors ? chalk.gray('═'.repeat(60)) : '═'.repeat(60));
-      
-      if (!opts.json) {
-        console.log(enableColors ? `\n${chalk.yellow('ℹ Note:')}` : '\nℹ Note:');
-        console.log(enableColors ? chalk.gray('  For live metrics, the loop must be running.') : '  For live metrics, the loop must be running.');
-        console.log(enableColors ? chalk.gray('  This report shows configuration and system resource status.\n') : '  This report shows configuration and system resource status.\n');
-      }
 
-      // Update with agent configs
-      const agentConfigs = config.agents;
-      if (agentConfigs.length > 0) {
-        console.log(enableColors ? chalk.bold.cyan(`🤖 Configured Agents (${agentConfigs.length}):`) : `🤖 Configured Agents (${agentConfigs.length}):`);
-        for (const agent of agentConfigs) {
-          console.log(`  ${enableColors ? chalk.green('•') : '•'} ${enableColors ? chalk.cyan(agent.name) : agent.name} (${enableColors ? chalk.yellow(agent.type) : agent.type})`);
+      // Try to fetch from running instance if --live flag is set or if we can connect
+      const port = parseInt(opts.port, 10);
+      const { isHealthServerAvailable } = await import('./utils/health-client.js');
+      const serverAvailable = await isHealthServerAvailable(opts.host, port);
+
+      if (opts.live || serverAvailable) {
+        if (!serverAvailable) {
+          displayError(
+            'Cannot connect to health server',
+            `Make sure the loop is running with --health-port ${port}`
+          );
+          process.exit(1);
         }
-        console.log('');
-      }
 
-      // Generate and display report
-      const report = healthChecker.getJsonReport();
+        const { fetchHealthReport } = await import('./utils/health-client.js');
+        const report = await fetchHealthReport({ host: opts.host, port });
 
-      if (opts.json) {
-        console.log(JSON.stringify(report, null, 2));
+        if (opts.json) {
+          console.log(JSON.stringify(report, null, 2));
+        } else {
+          const { HealthChecker } = await import('./core/health-checker.js');
+          const healthChecker = new HealthChecker();
+          console.log(healthChecker.formatReportForConsole(report));
+        }
       } else {
-        console.log(healthChecker.formatReportForConsole(report));
+        // Fallback to static report from config
+        const { HealthChecker } = await import('./core/health-checker.js');
+        const configManager = new ConfigManager(opts.config);
+
+        if (!existsSync(configManager['configPath'])) {
+          displayError(
+            'No configuration file found',
+            'Run "qwen-loop init" to create a configuration file first'
+          );
+          process.exit(1);
+        }
+
+        const config = configManager.getConfig();
+
+        const healthChecker = new HealthChecker();
+
+        // Update with config info
+        healthChecker.updateLoopStats({
+          maxConcurrentTasks: config.maxConcurrentTasks,
+          loopInterval: config.loopInterval,
+          maxRetries: config.maxRetries,
+          workingDirectory: config.workingDirectory
+        });
+
+        console.log(enableColors ? `\n${chalk.yellow('ℹ Note:')}` : '\nℹ Note:');
+        console.log(enableColors ? chalk.gray('  For live metrics, start the loop with --health-port and use --live flag.') : '  For live metrics, start the loop with --health-port and use --live flag.');
+        console.log(enableColors ? chalk.gray('  This report shows configuration and system resource status.\n') : '  This report shows configuration and system resource status.\n');
+
+        // Update with agent configs
+        const agentConfigs = config.agents;
+        if (agentConfigs.length > 0) {
+          console.log(enableColors ? chalk.bold.cyan(`🤖 Configured Agents (${agentConfigs.length}):`) : `🤖 Configured Agents (${agentConfigs.length}):`);
+          for (const agent of agentConfigs) {
+            console.log(`  ${enableColors ? chalk.green('•') : '•'} ${enableColors ? chalk.cyan(agent.name) : agent.name} (${enableColors ? chalk.yellow(agent.type) : agent.type})`);
+          }
+          console.log('');
+        }
+
+        // Generate and display report
+        const report = healthChecker.getJsonReport();
+
+        if (opts.json) {
+          console.log(JSON.stringify(report, null, 2));
+        } else {
+          console.log(healthChecker.formatReportForConsole(report));
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

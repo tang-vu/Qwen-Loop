@@ -13,7 +13,13 @@ export class HealthServer {
   private port: number;
   private host: string;
 
-  constructor(healthChecker: HealthChecker, port = 3100, host = 'localhost') {
+  /**
+   * Create a new HealthServer instance
+   * @param healthChecker - The health checker to query for health data
+   * @param port - Port number to listen on (default: 3100)
+   * @param host - Hostname to bind to (default: 'localhost')
+   */
+  constructor(healthChecker: HealthChecker, port = 3100, host = '0.0.0.0') {
     this.healthChecker = healthChecker;
     this.port = port;
     this.host = host;
@@ -21,6 +27,11 @@ export class HealthServer {
 
   /**
    * Start the health check HTTP server
+   *
+   * Binds to the configured host and port and begins listening for
+   * incoming HTTP requests. Resolves when the server is ready.
+   *
+   * @throws Error if the port is already in use or cannot be bound
    */
   async start(): Promise<void> {
     if (this.server) {
@@ -45,6 +56,10 @@ export class HealthServer {
 
   /**
    * Stop the health check HTTP server
+   *
+   * Gracefully closes all connections and stops listening for new requests.
+   *
+   * @throws Error if an error occurs while closing the server
    */
   async stop(): Promise<void> {
     if (!this.server) {
@@ -67,6 +82,8 @@ export class HealthServer {
 
   /**
    * Get the server URL
+   *
+   * @returns The full URL where the health server is accessible
    */
   getUrl(): string {
     return `http://${this.host}:${this.port}`;
@@ -124,6 +141,22 @@ export class HealthServer {
         case '/health/ready':
         case '/health/ready/':
           this.handleReadiness(res);
+          break;
+        case '/health/metrics':
+        case '/health/metrics/':
+          this.handleMetrics(res);
+          break;
+        case '/health/agents':
+        case '/health/agents/':
+          this.handleAgentStatus(res);
+          break;
+        case '/health/throughput':
+        case '/health/throughput/':
+          this.handleThroughput(res);
+          break;
+        case '/health/resources':
+        case '/health/resources/':
+          this.handleResources(res);
           break;
         default:
           res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -224,6 +257,83 @@ export class HealthServer {
         message: report.agents.length === 0 ? 'No agents configured or initialized yet' : undefined
       }));
     }
+  }
+
+  /**
+   * Handle detailed metrics request
+   */
+  private handleMetrics(res: ServerResponse): void {
+    const report = this.healthChecker.getJsonReport();
+    
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache'
+    });
+    res.end(JSON.stringify({
+      timestamp: report.timestamp,
+      uptime: report.uptime,
+      taskThroughput: report.taskThroughput,
+      priorityBreakdown: report.priorityBreakdown,
+      resources: report.resources,
+      config: report.config
+    }, null, 2));
+  }
+
+  /**
+   * Handle agent status request
+   */
+  private handleAgentStatus(res: ServerResponse): void {
+    const report = this.healthChecker.getJsonReport();
+    
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache'
+    });
+    res.end(JSON.stringify({
+      timestamp: report.timestamp,
+      totalAgents: report.agents.length,
+      healthyAgents: report.agents.filter(a => a.healthy).length,
+      agents: report.agents
+    }, null, 2));
+  }
+
+  /**
+   * Handle throughput metrics request
+   */
+  private handleThroughput(res: ServerResponse): void {
+    const report = this.healthChecker.getJsonReport();
+    
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache'
+    });
+    res.end(JSON.stringify({
+      timestamp: report.timestamp,
+      uptime: report.uptime,
+      throughput: report.taskThroughput,
+      priorityBreakdown: report.priorityBreakdown
+    }, null, 2));
+  }
+
+  /**
+   * Handle resource usage request
+   */
+  private handleResources(res: ServerResponse): void {
+    const report = this.healthChecker.getJsonReport();
+    
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache'
+    });
+    res.end(JSON.stringify({
+      timestamp: report.timestamp,
+      resources: report.resources,
+      summary: report.summary
+    }, null, 2));
   }
 
   /**

@@ -110,9 +110,15 @@ export class LoopManager implements ILoopManager {
 
   /**
    * Stop the agent loop and clean up resources
+   *
+   * Halts task processing, clears the scheduling interval, and cancels
+   * all currently running tasks across all agents.
+   *
+   * @throws Does not throw; logs errors for individual failures
    */
   async stop(): Promise<void> {
     if (!this.isLoopRunning) {
+      logger.debug('Loop not running, skip stop', { operation: 'loop.lifecycle' });
       return;
     }
 
@@ -133,9 +139,15 @@ export class LoopManager implements ILoopManager {
 
   /**
    * Pause the agent loop
+   *
+   * Temporarily halts task processing while maintaining the current state.
+   * Call `resume()` to continue processing.
+   *
+   * @throws Does not throw; logs a debug message if loop is not running
    */
   async pause(): Promise<void> {
     if (!this.isLoopRunning) {
+      logger.debug('Loop not running, cannot pause', { operation: 'loop.lifecycle' });
       return;
     }
 
@@ -154,6 +166,7 @@ export class LoopManager implements ILoopManager {
    */
   async resume(): Promise<void> {
     if (!this.isLoopRunning || !this.isLoopPaused) {
+      logger.debug('Loop not running or not paused, cannot resume', { operation: 'loop.lifecycle' });
       return;
     }
 
@@ -195,12 +208,21 @@ export class LoopManager implements ILoopManager {
 
   /**
    * Add a new task to the queue
+   *
+   * Creates a task with a unique ID and enqueues it for processing.
+   * The task will be picked up by the next available agent in the loop.
+   *
    * @param description - Human-readable description of the task
    * @param priority - Priority level (defaults to MEDIUM)
    * @param metadata - Optional metadata to attach to the task
    * @returns The created Task object
+   * @throws Error if description is empty or whitespace-only
    */
   addTask(description: string, priority: TaskPriority = TaskPriority.MEDIUM, metadata?: Record<string, unknown>): Task {
+    if (!description || description.trim().length === 0) {
+      throw new Error('Task description cannot be empty or whitespace-only');
+    }
+
     const task: Task = {
       id: uuidv4(),
       description,

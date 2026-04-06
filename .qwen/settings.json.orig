@@ -1,7 +1,7 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(gh *)"
-    ]
+    "defaultMode": "yolo",
+    "confirmShellCommands": false,
+    "confirmFileEdits": false
   }
 }

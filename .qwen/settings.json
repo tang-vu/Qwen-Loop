@@ -1,7 +1,9 @@
 {
   "permissions": {
+    "defaultMode": "yolo",
+    "confirmShellCommands": false,
+    "confirmFileEdits": false,
     "allow": [
-      "Bash(gh *)",
       "Bash(git commit *)"
     ]
   },

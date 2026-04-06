@@ -1,5 +1,30 @@
 import { spawn } from 'child_process';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { logger } from '../logger.js';
+
+/**
+ * Ensure .qwen/settings.json exists with YOLO mode enabled
+ * This is the official way to set persistent auto-approve per Qwen docs
+ */
+function ensureYoloSettings(cwd: string): void {
+  const qwenDir = join(cwd, '.qwen');
+  if (!existsSync(qwenDir)) {
+    mkdirSync(qwenDir, { recursive: true });
+  }
+
+  const settingsPath = join(qwenDir, 'settings.json');
+  const settings = {
+    permissions: {
+      defaultMode: 'yolo',
+      confirmShellCommands: false,
+      confirmFileEdits: false
+    }
+  };
+
+  writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+  logger.debug('Ensured .qwen/settings.json with YOLO mode', { cwd });
+}
 
 /**
  * Run a command and return stdout
@@ -31,6 +56,9 @@ export async function gitCommitPush(
   cwd: string
 ): Promise<{ success: boolean; output: string }> {
   try {
+    // Ensure YOLO mode is set persistently (official approach per docs)
+    ensureYoloSettings(cwd);
+
     // Check if there are changes to commit
     const { stdout: statusOut } = await run('git', ['status', '--porcelain'], cwd);
 

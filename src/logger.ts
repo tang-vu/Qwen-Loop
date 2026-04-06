@@ -79,10 +79,14 @@ export const DEFAULT_LOG_ROTATION: LogRotationConfig = {
 export const DEFAULT_LOG_SAMPLING: LogSamplingConfig = {
   defaultInterval: 5000,
   rules: {
-    'No tasks in queue': 10000,
+    'No tasks in queue': 15000,
     'Max concurrent tasks reached': 10000,
-    'Agent output received': 10000,
-    'Agent stderr received': 10000
+    'Agent output received': 15000,
+    'Agent stderr received': 15000,
+    'Task status updated': 10000,
+    'Agent registered': 10000,
+    'Configuration loaded': 10000,
+    'No configuration file found': 30000
   }
 };
 
@@ -281,7 +285,7 @@ class Logger {
         }),
         new winston.transports.File({
           dirname: DEFAULT_LOG_ROTATION.dirname,
-          filename: `${DEFAULT_LOG_ROTATION.dirname}/${DEFAULT_LOG_ROTATION.filename}`,
+          filename: DEFAULT_LOG_ROTATION.filename,
           format: fileFormat,
           maxsize: DEFAULT_LOG_ROTATION.maxsize,
           maxFiles: DEFAULT_LOG_ROTATION.maxFiles,
@@ -394,6 +398,32 @@ class Logger {
    */
   debugOnce(message: string, metadata?: LogMetadata) {
     this.logger.debug(message, metadata);
+  }
+
+  /**
+   * Log a warning message only once (useful for deprecation notices or one-time warnings)
+   * @param message - The message to log
+   * @param metadata - Optional metadata
+   */
+  warnOnce(message: string, metadata?: LogMetadata) {
+    if (this.logSampling.has(`warn:${message}`)) {
+      return;
+    }
+    this.logSampling.set(`warn:${message}`, Date.now());
+    this.logger.warn(message, metadata);
+  }
+
+  /**
+   * Log an informational message only once (useful for initialization notices)
+   * @param message - The message to log
+   * @param metadata - Optional metadata
+   */
+  infoOnce(message: string, metadata?: LogMetadata) {
+    if (this.logSampling.has(`info:${message}`)) {
+      return;
+    }
+    this.logSampling.set(`info:${message}`, Date.now());
+    this.logger.info(message, metadata);
   }
 }
 

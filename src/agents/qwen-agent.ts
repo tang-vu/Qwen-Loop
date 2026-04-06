@@ -74,9 +74,10 @@ export class QwenAgent extends BaseAgent {
    * @throws Error if Qwen Code CLI is not found in PATH
    */
   protected async onInitialize(): Promise<void> {
-    logger.debug('🔍 Verifying Qwen Code CLI availability', { 
+    logger.debug('🔍 Verifying Qwen Code CLI availability', {
       agent: this.name,
-      operation: 'agent.init'
+      operation: 'agent.init',
+      qwenPath: this.qwenPath
     });
 
     return new Promise((resolve, reject) => {
@@ -86,12 +87,21 @@ export class QwenAgent extends BaseAgent {
       });
 
       checkProcess.on('close', (code: number | null) => {
-        logger.debug(`Qwen Code CLI check process exited`, { agent: this.name, exitCode: code });
+        logger.debug(`✅ Qwen Code CLI check complete`, {
+          agent: this.name,
+          exitCode: code,
+          operation: 'agent.init'
+        });
         resolve();
       });
 
       checkProcess.on('error', (error: Error) => {
-        logger.error(`Qwen Code CLI not found`, { agent: this.name, error, path: this.qwenPath });
+        logger.error(`❌ Qwen Code CLI not found`, {
+          agent: this.name,
+          operation: 'agent.init',
+          error,
+          path: this.qwenPath
+        });
         reject(new Error(
           `Qwen Code CLI is not installed or not in PATH. ` +
           `Searched for: '${this.qwenPath}'. ` +

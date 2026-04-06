@@ -40,13 +40,20 @@ export class MultiProjectManager {
       throw new Error('No projects configured. Use single-project mode instead.');
     }
 
-    logger.info(`Initializing ${this.globalConfig.projects.length} projects...`);
+    logger.info(`🚀 Initializing ${this.globalConfig.projects.length} projects...`, {
+      operation: 'multi-project.init',
+      projectCount: this.globalConfig.projects.length
+    });
 
     for (const projectConfig of this.globalConfig.projects) {
       await this.addProject(projectConfig);
     }
 
-    logger.info(`All ${this.projectNames.length} projects initialized`);
+    logger.info(`✅ All ${this.projectNames.length} projects initialized`, {
+      operation: 'multi-project.init',
+      projectCount: this.projectNames.length,
+      projects: this.projectNames
+    });
   }
 
   /**
@@ -101,7 +108,11 @@ export class MultiProjectManager {
     this.projectConfigs.set(projectConfig.name, projectLoopConfig);
     this.projectNames.push(projectConfig.name);
 
-    logger.info(`Project "${projectConfig.name}" added (working dir: ${projectConfig.workingDirectory})`);
+    logger.info(`✅ Project "${projectConfig.name}" added`, {
+      operation: 'multi-project.add',
+      project: projectConfig.name,
+      workingDir: projectConfig.workingDirectory
+    });
   }
 
   /**
@@ -123,8 +134,11 @@ export class MultiProjectManager {
     this.isRunning = true;
     this.currentIndex = 0;
 
-    logger.info(`Starting multi-project loop with ${this.projectNames.length} projects`);
-    logger.info(`Projects: ${this.projectNames.join(', ')}`);
+    logger.info(`🚀 Starting multi-project loop`, {
+      operation: 'multi-project.lifecycle',
+      projectCount: this.projectNames.length,
+      projects: this.projectNames
+    });
 
     // Start with first project
     await this.processCurrentProject();
@@ -161,18 +175,24 @@ export class MultiProjectManager {
       if (manager.isRunning()) {
         stopPromises.push(
           manager.stop().catch((error) => {
-            logger.error(`Error stopping project "${name}": ${error instanceof Error ? error.message : String(error)}`, {
+            logger.error(`❌ Error stopping project "${name}"`, {
               operation: 'multi-project.stop',
-              project: name
+              project: name,
+              error: error instanceof Error ? error : new Error(String(error))
             });
           })
         );
-        logger.info(`Stopping project "${name}"`);
+        logger.info(`🛑 Stopping project "${name}"`, {
+          operation: 'multi-project.stop',
+          project: name
+        });
       }
     }
 
     await Promise.all(stopPromises);
-    logger.info('All projects stopped');
+    logger.info('✅ All projects stopped', {
+      operation: 'multi-project.stop'
+    });
   }
 
   /**
@@ -204,8 +224,9 @@ export class MultiProjectManager {
     for (const name of this.projectNames) {
       const manager = this.projectManagers.get(name);
       if (!manager) {
-        logger.warn(`Project manager not found for "${name}" during health report generation`, {
-          operation: 'multi-project.health'
+        logger.warn(`⚠️ Project manager not found for "${name}"`, {
+          operation: 'multi-project.health',
+          project: name
         });
         continue;
       }
@@ -368,12 +389,18 @@ export class MultiProjectManager {
     const manager = this.projectManagers.get(projectName);
 
     if (!manager) {
-      logger.error(`Project manager not found for "${projectName}"`);
+      logger.error(`❌ Project manager not found for "${projectName}"`, {
+        operation: 'multi-project.error',
+        project: projectName
+      });
       this.currentIndex = (this.currentIndex + 1) % this.projectNames.length;
       return;
     }
 
-    logger.info(`\n📁 Working on project: ${projectName}`);
+    logger.info(`\n📁 Working on project: ${projectName}`, {
+      operation: 'multi-project.lifecycle',
+      project: projectName
+    });
 
     try {
       // Start the project's loop
@@ -393,13 +420,18 @@ export class MultiProjectManager {
           if (!isProjectRunning) {
             clearInterval(this.statusCheckInterval!);
             this.statusCheckInterval = null;
-            logger.info(`Project "${projectName}" completed its tasks`);
+            logger.info(`✅ Project "${projectName}" completed`, {
+              operation: 'multi-project.lifecycle',
+              project: projectName
+            });
 
             // Move to next project
             this.currentIndex = (this.currentIndex + 1) % this.projectNames.length;
 
             if (this.currentIndex === 0) {
-              logger.info('\n🔄 Completed all projects, starting from beginning...');
+              logger.info('\n🔄 Completed all projects, starting from beginning...', {
+                operation: 'multi-project.lifecycle'
+              });
             }
 
             // Small delay before next project
@@ -415,12 +447,18 @@ export class MultiProjectManager {
         }
       }, 5000);
     } catch (error) {
-      logger.error(`Failed to start project "${projectName}": ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`❌ Failed to start project "${projectName}"`, {
+        operation: 'multi-project.error',
+        project: projectName,
+        error: error instanceof Error ? error : new Error(String(error))
+      });
       // Move to next project even if this one failed
       this.currentIndex = (this.currentIndex + 1) % this.projectNames.length;
 
       if (this.currentIndex === 0) {
-        logger.info('\n🔄 Completed all projects, starting from beginning...');
+        logger.info('\n🔄 Completed all projects, starting from beginning...', {
+          operation: 'multi-project.lifecycle'
+        });
       }
 
       // Small delay before next project

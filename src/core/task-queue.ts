@@ -52,10 +52,10 @@ export class TaskQueue implements ITaskQueue {
     const queue = this.priorityQueues.get(task.priority);
     if (queue) {
       queue.push(task);
-      logger.debug(`📥 Task enqueued`, { 
+      logger.debug(`📥 Task enqueued (priority: ${task.priority})`, {
         operation: 'queue.enqueue',
-        task: task.id, 
-        priority: task.priority 
+        task: task.id,
+        priority: task.priority
       });
     } else {
       // This should be unreachable if TaskPriority enum is used correctly
@@ -84,10 +84,10 @@ export class TaskQueue implements ITaskQueue {
       const queue = this.priorityQueues.get(priority);
       if (queue && queue.length > 0) {
         const task = queue.shift()!;
-        logger.debug(`📤 Task dequeued`, { 
+        logger.debug(`📤 Task dequeued (priority: ${task.priority})`, {
           operation: 'queue.dequeue',
-          task: task.id, 
-          priority: task.priority 
+          task: task.id,
+          priority: task.priority
         });
         return task;
       }

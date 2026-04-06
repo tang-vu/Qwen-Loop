@@ -186,13 +186,32 @@ Repetitive debug messages are automatically sampled. Default rules:
 
 | Message Pattern | Interval |
 |----------------|----------|
-| "No tasks in queue" | 10s |
+| "No tasks in queue" | 15s |
 | "Max concurrent tasks reached" | 10s |
-| "Agent output received" | 10s |
-| "Agent stderr received" | 10s |
+| "Agent output received" | 15s |
+| "Agent stderr received" | 15s |
+| "Task status updated" | 10s |
+| "Agent registered" | 10s |
+| "Configuration loaded" | 10s |
+| "No configuration file found" | 30s |
 | All other debug messages | 5s (default) |
 
 Custom sampling can be configured by modifying `DEFAULT_LOG_SAMPLING` in `logger.ts`.
+
+## One-Time Logging
+
+For messages that should only appear once, use these helper methods:
+
+```typescript
+// Log warning only once
+logger.warnOnce('Deprecation notice', { operation: 'config.deprecated' });
+
+// Log info only once
+logger.infoOnce('Feature enabled', { operation: 'feature.flag' });
+
+// Log debug only once (no sampling)
+logger.debugOnce('Important debug', { operation: 'debug.info' });
+```
 
 ## Log Analysis
 
@@ -231,9 +250,9 @@ jq -r 'select(.level == "error" and .operation == "task.failure") | .task' logs/
 Always include `operation` field for categorization:
 
 ```typescript
-logger.info('Task completed', { 
+logger.info('Task completed', {
   operation: 'task.lifecycle',  // ✅ Good
-  task: taskId 
+  task: taskId
 });
 ```
 
@@ -241,7 +260,7 @@ logger.info('Task completed', {
 Add relevant identifiers for tracing:
 
 ```typescript
-logger.debug('Processing', { 
+logger.debug('Processing', {
   operation: 'task.execution',
   task: taskId,
   agent: agentName,
@@ -249,22 +268,39 @@ logger.debug('Processing', {
 });
 ```
 
-### 3. Truncate Long Data
+### 3. Pass Error Objects Directly
+Always pass Error objects directly to enable full stack trace capture:
+
+```typescript
+// ✅ Good - preserves stack trace
+logger.error('Task failed', {
+  operation: 'task.failure',
+  task: taskId,
+  error: error instanceof Error ? error : new Error(String(error))
+});
+
+// ❌ Bad - loses stack trace
+logger.error('Task failed', {
+  error: error.message  // Loses stack trace
+});
+```
+
+### 4. Truncate Long Data
 Descriptions and errors are auto-truncated, but pre-truncate for performance:
 
 ```typescript
-logger.info('Task started', { 
+logger.info('Task started', {
   description: task.description.slice(0, 80)  // ✅ Good
 });
 ```
 
-### 4. Use Appropriate Log Levels
-- **info**: Important events worth tracking
-- **warn**: Issues that don't stop execution
-- **error**: Failures requiring attention
-- **debug**: Details for troubleshooting (sampled)
+### 5. Use Appropriate Log Levels
+- **error**: Critical failures requiring attention (task failures, config errors)
+- **warn**: Non-fatal issues (retries, git failures, missing agents)
+- **info**: Important lifecycle events (start/stop, completions, initializations)
+- **debug**: Operational details with sampling (queue ops, CLI checks, file reads)
 
-### 5. Leverage Correlation IDs
+### 6. Leverage Correlation IDs
 For complex operations, generate correlation IDs to trace related events:
 
 ```typescript
@@ -274,6 +310,14 @@ logger.info('Starting complex operation', { correlationId });
 logger.info('Step 1 complete', { correlationId });
 // ... later ...
 logger.info('Operation complete', { correlationId });
+```
+
+### 7. Use One-Time Logging for Rare Events
+For events that should only be logged once:
+
+```typescript
+logger.infoOnce('Feature enabled', { operation: 'feature.init' });
+logger.warnOnce('Deprecated API used', { operation: 'api.deprecated' });
 ```
 
 ## Troubleshooting

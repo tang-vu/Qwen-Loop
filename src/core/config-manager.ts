@@ -43,10 +43,10 @@ export class ConfigManager {
     try {
       this.config = this.loadConfig(strictMode);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`❌ ConfigManager initialization failed: ${errorMessage}`, {
-        operation: 'config.init',
-        configPath: this.configPath
+      logger.error(`❌ ConfigManager initialization failed`, {
+        operation: 'config.error',
+        configPath: this.configPath,
+        error: error instanceof Error ? error : new Error(String(error))
       });
       throw error;
     }
@@ -69,15 +69,15 @@ export class ConfigManager {
           agents: config.agents || []
         } as LoopConfig;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`❌ Failed to load configuration`, {
           operation: 'config.error',
           configPath: this.configPath,
-          error: errorMessage
+          error: error instanceof Error ? error : new Error(String(error))
         });
 
         if (strictMode) {
-          throw new Error(`Failed to parse configuration file at ${this.configPath}: ${errorMessage}`);
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          throw new Error(`Failed to parse configuration file at ${this.configPath}: ${errorMsg}`);
         }
 
         logger.warn('⚠️ Falling back to default configuration due to parse error', {
@@ -122,13 +122,12 @@ export class ConfigManager {
         operation: 'config.save'
       });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error(`❌ Failed to save configuration`, {
         operation: 'config.error',
         configPath: this.configPath,
-        error: errorMessage
+        error: error instanceof Error ? error : new Error(String(error))
       });
-      throw new Error(`Failed to save configuration: ${errorMessage}`);
+      throw new Error(`Failed to save configuration: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

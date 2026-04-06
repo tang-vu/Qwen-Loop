@@ -62,7 +62,10 @@ export abstract class BaseAgent implements IAgent {
     this.name = config.name;
     this.type = config.type;
     this.config = config;
-    logger.debug(`Agent created`, { agent: this.name });
+    logger.debug(`🤖 Agent created: ${this.name}`, {
+      agent: this.name,
+      operation: 'agent.init'
+    });
   }
 
   /**
@@ -78,13 +81,16 @@ export abstract class BaseAgent implements IAgent {
     try {
       this.status = AgentStatus.IDLE;
       await this.onInitialize();
-      logger.info(`Agent initialized: ${this.name}`, { agent: this.name });
+      logger.info(`✅ Agent initialized: ${this.name}`, {
+        agent: this.name,
+        operation: 'agent.init'
+      });
     } catch (error) {
       this.status = AgentStatus.ERROR;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Agent initialization failed`, {
+      logger.error(`❌ Agent initialization failed: ${this.name}`, {
         agent: this.name,
-        error: errorMessage
+        operation: 'agent.init',
+        error: error instanceof Error ? error : new Error(String(error))
       });
       throw error;
     }
@@ -121,9 +127,10 @@ export abstract class BaseAgent implements IAgent {
     task.startedAt = new Date();
     task.assignedAgent = this.id;
 
-    logger.debug(`Starting task`, {
+    logger.debug(`▶️ Starting task execution`, {
       agent: this.name,
-      task: task.id
+      task: task.id,
+      operation: 'task.execution'
     });
 
     try {
@@ -140,16 +147,18 @@ export abstract class BaseAgent implements IAgent {
         task.status = TaskStatus.FAILED;
         task.completedAt = new Date();
         task.error = result.error;
-        logger.warn(`Task failed`, {
+        logger.warn(`⚠️ Task failed: ${this.name}`, {
           agent: this.name,
           task: task.id,
+          operation: 'task.failure',
           error: result.error?.slice(0, 100)
         });
       }
 
-      logger.debug(`Task execution finished`, {
+      logger.debug(`✅ Task execution finished`, {
         agent: this.name,
         task: task.id,
+        operation: 'task.execution',
         duration: executionTime,
         success: result.success
       });
@@ -163,9 +172,10 @@ export abstract class BaseAgent implements IAgent {
       task.completedAt = new Date();
       task.error = errorMessage;
 
-      logger.error('Task execution error', {
+      logger.error('❌ Task execution error', {
         agent: this.name,
         task: task.id,
+        operation: 'task.error',
         error // Pass original Error object to capture stack trace
       });
 
@@ -191,9 +201,10 @@ export abstract class BaseAgent implements IAgent {
    */
   async cancelTask(): Promise<void> {
     if (this.currentTask && this.abortController) {
-      logger.debug(`Cancelling task`, {
+      logger.debug(`🚫 Cancelling task`, {
         agent: this.name,
-        task: this.currentTask.id
+        task: this.currentTask.id,
+        operation: 'task.cancel'
       });
 
       this.abortController.abort();

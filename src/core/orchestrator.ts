@@ -34,11 +34,10 @@ export class AgentOrchestrator implements IAgentOrchestrator {
     if (agent) {
       // Cancel any running tasks
       agent.cancelTask().catch((error) => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error(`⚠️ Error cancelling task during agent removal`, {
+        logger.error('❌ Error cancelling task during agent removal', {
           operation: 'orchestrator.cleanup',
           agent: agent.name,
-          error: errorMessage
+          error: error instanceof Error ? error : new Error(String(error))
         });
       });
 
@@ -196,11 +195,10 @@ export class AgentOrchestrator implements IAgentOrchestrator {
           agent: agent.name
         });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`❌ Failed to initialize agent ${agent.name}`, {
           operation: 'orchestrator.init',
           agent: agent.name,
-          error: errorMessage
+          error: error instanceof Error ? error : new Error(String(error))
         });
         // Agent remains in ERROR state from BaseAgent.initialize()
       }
@@ -227,11 +225,10 @@ export class AgentOrchestrator implements IAgentOrchestrator {
       try {
         await agent.cancelTask();
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`❌ Error cancelling task during bulk cancel`, {
           operation: 'orchestrator.cleanup',
           agent: agent.name,
-          error: errorMessage
+          error: error instanceof Error ? error : new Error(String(error))
         });
       }
     });

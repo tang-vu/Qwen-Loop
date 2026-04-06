@@ -312,7 +312,7 @@ export class LoopManager implements ILoopManager {
     // Check if we've reached max concurrent tasks
     const runningTasks = this.taskQueue.getTasksByStatus(TaskStatus.RUNNING);
     if (runningTasks.length >= this.config.maxConcurrentTasks) {
-      logger.debug(`⏳ Max concurrent tasks reached (${this.config.maxConcurrentTasks})`, { 
+      logger.debug(`⏳ Max concurrent tasks reached (${this.config.maxConcurrentTasks})`, {
         operation: 'loop.throttle',
         count: runningTasks.length
       }, 10000);
@@ -324,15 +324,25 @@ export class LoopManager implements ILoopManager {
 
     // If queue is empty and self-task generation is enabled, generate more tasks
     if (!task && this.selfTaskGenerator) {
-      const analysis = this.selfTaskGenerator.analyzeProject();
-      task = this.selfTaskGenerator.getNextTask(analysis);
-      if (task) {
-        this.taskQueue.enqueue(task);
-        logger.debug(`🔄 Self-generated task: ${task.description.slice(0, 60)}...`, {
+      try {
+        const analysis = this.selfTaskGenerator.analyzeProject();
+        task = this.selfTaskGenerator.getNextTask(analysis);
+        if (task) {
+          this.taskQueue.enqueue(task);
+          logger.debug(`🔄 Self-generated task: ${task.description.slice(0, 60)}...`, {
+            operation: 'task.generation',
+            task: task.id
+          });
+          task = this.taskQueue.dequeue(); // Re-dequeue the newly added task
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error('❌ Failed to generate self-directed task during loop iteration', {
           operation: 'task.generation',
-          task: task.id
+          error: error instanceof Error ? error : new Error(errorMessage)
         });
-        task = this.taskQueue.dequeue(); // Re-dequeue the newly added task
+        // Continue without self-task generation for this iteration
+        return;
       }
     }
 

@@ -83,7 +83,15 @@ export class TaskQueue implements ITaskQueue {
     for (const priority of priorityOrder) {
       const queue = this.priorityQueues.get(priority);
       if (queue && queue.length > 0) {
-        const task = queue.shift()!;
+        const task = queue.shift();
+        if (!task) {
+          // This should never happen since we checked queue.length > 0
+          logger.warn('Unexpected empty task in priority queue', {
+            operation: 'queue.dequeue',
+            priority
+          });
+          continue;
+        }
         logger.debug(`📤 Task dequeued (priority: ${task.priority})`, {
           operation: 'queue.dequeue',
           task: task.id,

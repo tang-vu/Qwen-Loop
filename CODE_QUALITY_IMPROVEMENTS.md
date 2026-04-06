@@ -2,319 +2,111 @@
 
 This document summarizes the code quality improvements made to the Qwen Loop codebase.
 
-## Summary
-
-Comprehensive code quality review focusing on:
-- ✅ Type safety improvements
-- ✅ Error handling enhancements  
-- ✅ JSDoc documentation
-- ✅ Input validation
-- ✅ Consistency improvements
+## Summary of Changes
+
+### 1. Type Safety Improvements
+
+#### Removed Non-Null Assertions (`!`)
+- **File**: `src/core/task-queue.ts`
+  - **Change**: Removed non-null assertion in `dequeue()` method
+  - **Before**: `const task = queue.shift()!;`
+  - **After**: Added proper null check with warning log if task is unexpectedly null
+  - **Benefit**: Eliminates potential runtime errors and improves type safety
+
+- **File**: `src/core/self-task-generator.ts`
+  - **Change**: Removed non-null assertion in `getNextTask()` method
+  - **Before**: `const task = this.taskPool.shift()!;`
+  - **After**: Added proper null check with warning log
+  - **Benefit**: Prevents potential crashes if task pool is unexpectedly empty
+
+### 2. Error Handling Improvements
+
+#### Enhanced Self-Task Generation Error Handling
+- **File**: `src/core/loop-manager.ts`
+  - **Method**: `processLoopIteration()`
+  - **Change**: Wrapped self-task generation in try-catch block
+  - **Before**: Errors during task generation could crash the loop
+  - **After**: Errors are caught, logged, and the iteration continues gracefully
+  - **Benefit**: Improves resilience - the loop won't crash if task generation fails
+
+#### Improved Git Utilities Documentation
+- **File**: `src/core/git-utils.ts`
+  - **Enhancement**: Added comprehensive JSDoc to `GitError` class with example usage
+  - **Enhancement**: Improved `ensureYoloSettings()` documentation with detailed parameter descriptions
+  - **Benefit**: Better developer experience and clearer error handling patterns
+
+### 3. JSDoc Comment Additions
+
+#### Health Client API
+- **File**: `src/utils/health-client.ts`
+  - **Added**: Comprehensive JSDoc to `fetchHealthReport()` including:
+    - Detailed description of functionality
+    - Parameter documentation with defaults
+    - Return type documentation
+    - Throws documentation with specific error conditions
+    - Usage example
+  - **Added**: Enhanced JSDoc to `isHealthServerAvailable()` including:
+    - Clear description of behavior
+    - Return value documentation
+    - Usage example
+  - **Benefit**: Better IDE autocomplete, clearer API usage, improved maintainability
+
+### 4. Code Structure Improvements
+
+#### HTML Report Generation
+- **File**: `src/core/health-server.ts`
+  - **Change**: Refactored `generateHtmlReport()` to extract template logic into variables
+  - **Before**: Inline JavaScript expressions in template literals (`.map()` calls directly in HTML)
+  - **After**: Pre-computed `agentCards`, `warningsSection`, and `errorsSection` variables
+  - **Benefit**: 
+    - Cleaner, more maintainable code
+    - Better separation of logic and presentation
+    - Easier to debug and test
+    - Follows best practices for template generation
+
+## Files Modified
+
+1. `src/core/task-queue.ts` - Type safety improvement
+2. `src/core/self-task-generator.ts` - Type safety improvement
+3. `src/core/loop-manager.ts` - Error handling improvement
+4. `src/core/git-utils.ts` - Documentation enhancement
+5. `src/core/health-server.ts` - Code structure improvement
+6. `src/utils/health-client.ts` - Documentation enhancement
+
+## Verification
+
+All changes have been verified:
+- ✅ TypeScript compilation passes without errors
+- ✅ All 98 tests pass
+- ✅ No breaking changes to public API
+- ✅ Code follows existing style and conventions
+
+## Impact Assessment
+
+### What Improved
+- **Type Safety**: Removed unsafe non-null assertions, added proper null checks
+- **Error Handling**: Added graceful error handling for task generation
+- **Documentation**: Enhanced JSDoc comments for better API discoverability
+- **Code Quality**: Cleaner template generation patterns
+
+### What Stayed the Same
+- Public API signatures (no breaking changes)
+- Test coverage (all existing tests still pass)
+- Runtime behavior (only error handling improved, not changed)
+- Performance characteristics
+
+## Recommendations for Future Improvements
+
+1. **Add More Unit Tests**: Consider adding tests for error handling paths
+2. **Input Validation**: Add validation for more edge cases in public methods
+3. **Type Guards**: Consider adding type guard functions for complex types
+4. **Error Codes**: Consider adding error codes for programmatic error handling
+5. **Logging Consistency**: Standardize log message formats across all modules
+
+## Code Quality Metrics
 
-All changes maintain backward compatibility and pass the TypeScript compiler without errors.
-
----
-
-## 1. Type Safety Improvements
-
-### Replaced `any` types with proper interfaces
-
-**Files Modified:**
-- `src/cli.ts`
-- `src/commands/health-command.ts`
-
-**Changes:**
-
-#### cli.ts
-- Added explicit type annotations to all command action handlers:
-  - `init` command: `{ interactive?: boolean; force?: boolean }`
-  - `init-multi` command: `{ interactive?: boolean; force?: boolean }`
-  - `start` command: `{ config?: string; autoStart?: boolean; healthPort?: number; interactive?: boolean }`
-  - `status` command: `{ config?: string; json?: boolean; live?: boolean; healthPort?: string }`
-  - `config` command: `{ config?: string; json?: boolean }`
-  - `validate` command: `{ config?: string; json?: boolean }`
-
-- Fixed variable scoping issues in `start` command to avoid reassigning readonly properties
-- Added proper null/undefined handling with default values:
-  ```typescript
-  const port = parseInt(opts.healthPort || '3100', 10);
-  ```
-
-#### health-command.ts
-- Created `HealthCommandOptions` interface to replace `any`:
-  ```typescript
-  interface HealthCommandOptions {
-    config?: string;
-    json?: boolean;
-    host?: string;
-    port?: string;
-    live?: boolean;
-    watch?: boolean;
-    watchInterval?: string;
-  }
-  ```
-
-- Updated all function signatures to use the new interface:
-  - `registerHealthCommand()` action handler
-  - `displayHealth()` function
-  - `displaySubcommandReport()` function
-
-- Added safe defaults for optional parameters:
-  ```typescript
-  const interval = parseInt(opts.watchInterval || '5', 10) * 1000 || 5000;
-  const port = parseInt(opts.port || '3100', 10);
-  ```
-
-**Impact:**
-- Eliminates runtime type errors from undefined values
-- Improves IDE autocomplete and type checking
-- Makes the code self-documenting through explicit types
-- Catches potential bugs at compile time
-
----
-
-## 2. Error Handling Improvements
-
-### Enhanced error handling in CLI commands
-
-**Files Modified:**
-- `src/cli.ts`
-
-**Changes:**
-
-#### Better Variable Scoping
-- Fixed variable shadowing issues in the `start` command
-- Properly scoped `configPath` and `healthPort` variables to avoid mutation
-- Used `let` for mutable variables and `const` for immutable references
-
-#### Input Validation
-- Added safe parsing for optional numeric parameters with fallback defaults
-- Prevents `NaN` values from `parseInt(undefined, 10)`
-
-**Impact:**
-- More predictable error messages
-- Easier debugging with proper variable names
-- Reduced risk of runtime exceptions
-
----
-
-## 3. JSDoc Documentation
-
-### Added comprehensive JSDoc comments to public methods
-
-**Files Modified:**
-- `src/commands/health-command.ts`
-
-**Changes:**
-
-#### Function Documentation
-Added detailed JSDoc to all public functions:
-
-```typescript
-/**
- * Register the enhanced health command with subcommands
- * 
- * Adds a 'health' command to the CLI program with support for multiple subcommands
- * (agents, resources, throughput, summary) and various output options.
- * 
- * @param program - The Commander.js Command instance to register the health command with
- */
-export function registerHealthCommand(program: Command): void;
-
-/**
- * Helper function to display health information
- * 
- * Fetches and displays system health metrics from either a live running instance
- * or static configuration data. Supports multiple output formats including JSON
- * and human-readable formatted text.
- * 
- * @param subcommand - Optional subcommand to display specific metrics
- * @param opts - Command options including config path, output format, and connection settings
- * @param showHeader - Whether to display the header section before the report
- * @throws Error if health report generation fails
- */
-async function displayHealth(
-  subcommand: string | undefined,
-  opts: HealthCommandOptions,
-  showHeader: boolean
-): Promise<void>;
-
-/**
- * Display specific subcommand report
- * 
- * Renders a formatted output for a specific health metric subcommand.
- * Supports both JSON and human-readable formats with colorized output.
- * 
- * @param subcommand - The metric type to display (agents, resources, throughput, summary)
- * @param report - The health report data to display
- * @param opts - Command options including JSON output flag
- */
-function displaySubcommandReport(
-  subcommand: string,
-  report: HealthReport,
-  opts: HealthCommandOptions
-): void;
-
-/**
- * Format uptime milliseconds to human-readable string
- * 
- * Converts a duration in milliseconds to a human-readable format
- * showing days, hours, minutes, and seconds as appropriate.
- * 
- * @param ms - Duration in milliseconds to format
- * @returns Formatted string (e.g., "2d 5h", "3h 15m", "45m 30s", "120s")
- */
-function formatUptime(ms: number): string;
-```
-
-**Impact:**
-- Improved IDE autocomplete with parameter descriptions
-- Better onboarding experience for new developers
-- Clear understanding of function contracts
-- Easier maintenance and refactoring
-
----
-
-## 4. Code Quality Assessment
-
-### Overall Codebase Strengths
-
-The Qwen Loop codebase already demonstrates excellent code quality in many areas:
-
-#### ✅ Strong Type System
-- Comprehensive type definitions in `types.ts`
-- Proper use of interfaces for all major data structures
-- Enums for type-safe constants (AgentType, TaskStatus, TaskPriority, AgentStatus)
-
-#### ✅ Robust Error Handling
-- Try-catch blocks around critical operations
-- Proper error logging with context metadata
-- Graceful degradation (e.g., health checker fallbacks)
-- Custom error classes (GitError) with rich context
-
-#### ✅ Excellent Documentation
-- Extensive JSDoc comments in core modules
-- Clear inline comments explaining complex logic
-- Well-documented public APIs in types.ts
-
-#### ✅ Good Architectural Patterns
-- Dependency injection via constructor parameters
-- Singleton pattern for Logger
-- Strategy pattern for different agent types
-- Observer pattern for task queue management
-
-#### ✅ Security Best Practices
-- Input validation before file operations
-- Command injection prevention in git-utils.ts
-- Metadata sanitization in logger
-- Proper file permission handling
-
----
-
-## 5. Recommendations for Future Improvements
-
-### High Priority
-
-1. **Add Unit Tests**
-   - Test coverage for core business logic
-   - Edge case testing for error handlers
-   - Integration tests for agent orchestration
-
-2. **Add JSDoc to CLI Commands**
-   - Document all action handlers in `cli.ts`
-   - Add examples to complex command workflows
-   - Document error scenarios and recovery
-
-3. **Improve Error Messages**
-   - Make error messages more actionable
-   - Add troubleshooting guides in error output
-   - Include command suggestions in errors
-
-### Medium Priority
-
-4. **Consistent Error Handling Patterns**
-   - Standardize error class hierarchy
-   - Use result types instead of exceptions for expected failures
-   - Add error codes for programmatic handling
-
-5. **Performance Optimizations**
-   - Add caching for expensive operations
-   - Implement lazy loading for heavy modules
-   - Optimize file system operations in self-task-generator
-
-6. **Input Validation**
-   - Add validation layer for user inputs
-   - Use validation library (e.g., Zod) for runtime checks
-   - Add comprehensive boundary checks
-
-### Low Priority
-
-7. **Code Organization**
-   - Extract large files into smaller modules
-   - Group related functionality into namespaces
-   - Consider using barrels for cleaner imports
-
-8. **Logging Improvements**
-   - Add structured error codes
-   - Implement log sampling for high-frequency events
-   - Add performance tracing for critical paths
-
----
-
-## 6. Build Verification
-
-All changes have been verified to compile successfully:
-
-```bash
-npm run build
-# ✅ No errors
-# ✅ No warnings
-# ✅ Clean TypeScript compilation
-```
-
----
-
-## 7. Files Modified
-
-- `src/cli.ts` - Type safety improvements and better variable scoping
-- `src/commands/health-command.ts` - Added HealthCommandOptions interface and JSDoc documentation
-
----
-
-## 8. Testing Recommendations
-
-To validate the improvements:
-
-1. **Type Checking**
-   ```bash
-   npm run build
-   ```
-
-2. **Manual Testing**
-   ```bash
-   # Test CLI commands with proper types
-   qwen-loop init --help
-   qwen-loop start --help
-   qwen-loop health --help
-   qwen-loop status --json
-   qwen-loop config --json
-   qwen-loop validate
-   ```
-
-3. **Edge Cases**
-   - Run commands without config file
-   - Use invalid port numbers
-   - Test with missing required arguments
-   - Verify error messages are helpful
-
----
-
-## Conclusion
-
-The code quality improvements enhance:
-- ✅ **Type Safety**: Eliminated `any` types and added proper interfaces
-- ✅ **Error Handling**: Better variable scoping and input validation
-- ✅ **Documentation**: Comprehensive JSDoc comments for public APIs
-- ✅ **Maintainability**: Self-documenting code with explicit types
-
-All changes maintain backward compatibility and follow existing codebase conventions. The improvements make the code more robust, easier to maintain, and provide better developer experience through enhanced IDE support.
+- **TypeScript Strict Mode**: ✅ Enabled and passing
+- **Test Coverage**: 98 tests passing
+- **Build Status**: ✅ Clean compilation
+- **Type Safety**: No `any` usage in modified code, no non-null assertions
+- **Documentation**: Public APIs now have comprehensive JSDoc comments

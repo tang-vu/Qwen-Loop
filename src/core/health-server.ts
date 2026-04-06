@@ -353,6 +353,48 @@ export class HealthServer {
     const statusColor = report.status === 'healthy' ? '#22c55e' : report.status === 'degraded' ? '#f59e0b' : '#ef4444';
     const statusIcon = report.status === 'healthy' ? '🟢' : report.status === 'degraded' ? '🟡' : '🔴';
 
+    const agentCards = report.agents.map((agent: AgentHealthStatus) => {
+      const statusClass = agent.healthy ? (agent.status === 'busy' ? 'busy' : 'healthy') : 'error';
+      const timeSinceLastTask = agent.timeSinceLastTask
+        ? `<div class="metric"><span class="metric-label">Last Task</span><span class="metric-value">${this.formatUptime(agent.timeSinceLastTask)} ago</span></div>`
+        : '';
+      const errorSection = agent.error
+        ? `<div style="margin-top: 8px; color: #ef4444;">⚠️ ${agent.error}</div>`
+        : '';
+
+      return `
+      <div class="agent">
+        <div class="agent-header">
+          <span class="agent-name">${agent.name} (${agent.type})</span>
+          <span class="agent-status ${statusClass}">${agent.status.toUpperCase()}</span>
+        </div>
+        <div class="metric"><span class="metric-label">Tasks Executed</span><span class="metric-value">${agent.totalTasksExecuted}</span></div>
+        <div class="metric"><span class="metric-label">Failed</span><span class="metric-value">${agent.failedTasks}</span></div>
+        ${timeSinceLastTask}
+        ${errorSection}
+      </div>`;
+    }).join('');
+
+    const warningsSection = report.warnings.length > 0
+      ? `
+    <div class="card">
+      <h2>⚠️ Warnings</h2>
+      <ul style="list-style: none; padding: 0;">
+        ${report.warnings.map((w: string) => `<li style="padding: 8px; background: #f59e0b10; margin-bottom: 5px; border-left: 3px solid #f59e0b;">⚠️ ${w}</li>`).join('')}
+      </ul>
+    </div>`
+      : '';
+
+    const errorsSection = report.errors.length > 0
+      ? `
+    <div class="card">
+      <h2>❌ Errors</h2>
+      <ul style="list-style: none; padding: 0;">
+        ${report.errors.map((e: string) => `<li style="padding: 8px; background: #ef444410; margin-bottom: 5px; border-left: 3px solid #ef4444;">❌ ${e}</li>`).join('')}
+      </ul>
+    </div>`
+      : '';
+
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -389,7 +431,7 @@ export class HealthServer {
 <body>
   <div class="container">
     <h1>🤖 Qwen Loop - Health Check</h1>
-    
+
     <div class="summary">
       <div class="status-badge">${statusIcon} ${report.status.toUpperCase()}</div>
       <p style="margin-top: 10px;">${report.summary}</p>
@@ -429,40 +471,15 @@ export class HealthServer {
 
     <div class="card">
       <h2>🤖 Agents (${report.agents.length})</h2>
-      ${report.agents.map((agent: AgentHealthStatus) => {
-        const statusClass = agent.healthy ? (agent.status === 'busy' ? 'busy' : 'healthy') : 'error';
-        return `
-      <div class="agent">
-        <div class="agent-header">
-          <span class="agent-name">${agent.name} (${agent.type})</span>
-          <span class="agent-status ${statusClass}">${agent.status.toUpperCase()}</span>
-        </div>
-        <div class="metric"><span class="metric-label">Tasks Executed</span><span class="metric-value">${agent.totalTasksExecuted}</span></div>
-        <div class="metric"><span class="metric-label">Failed</span><span class="metric-value">${agent.failedTasks}</span></div>
-        ${agent.timeSinceLastTask ? `<div class="metric"><span class="metric-label">Last Task</span><span class="metric-value">${this.formatUptime(agent.timeSinceLastTask)} ago</span></div>` : ''}
-        ${agent.error ? `<div style="margin-top: 8px; color: #ef4444;">⚠️ ${agent.error}</div>` : ''}
-      </div>`;
-      }).join('')}
+      ${agentCards}
     </div>
 
-    ${report.warnings.length > 0 ? `
-    <div class="card">
-      <h2>⚠️ Warnings</h2>
-      <ul style="list-style: none; padding: 0;">
-        ${report.warnings.map((w: string) => `<li style="padding: 8px; background: #f59e0b10; margin-bottom: 5px; border-left: 3px solid #f59e0b;">⚠️ ${w}</li>`).join('')}
-      </ul>
-    </div>` : ''}
+    ${warningsSection}
 
-    ${report.errors.length > 0 ? `
-    <div class="card">
-      <h2>❌ Errors</h2>
-      <ul style="list-style: none; padding: 0;">
-        ${report.errors.map((e: string) => `<li style="padding: 8px; background: #ef444410; margin-bottom: 5px; border-left: 3px solid #ef4444;">❌ ${e}</li>`).join('')}
-      </ul>
-    </div>` : ''}
+    ${errorsSection}
 
     <div class="timestamp">
-      Last updated: ${report.timestamp.toISOString()} | 
+      Last updated: ${report.timestamp.toISOString()} |
       <a href="/health/json" style="color: #60a5fa;">View JSON</a>
     </div>
   </div>

@@ -14,11 +14,23 @@ export interface HealthClientOptions {
 }
 
 /**
- * Fetch health report from a running Qwen Loop instance via HTTP
- * 
- * @param options - Configuration for the health client connection
- * @returns Promise resolving to the health report data
- * @throws Error if the request fails or times out
+ * Fetch a comprehensive health report from a running Qwen Loop instance via HTTP
+ *
+ * Connects to the health server endpoint and retrieves detailed system metrics
+ * including agent health, task throughput, resource usage, and configuration.
+ *
+ * @param options - Configuration for the health client connection. If omitted,
+ *                  defaults to localhost:3100 with a 5-second timeout.
+ * @returns Promise resolving to a {@link HealthReport} object containing system metrics
+ * @throws {Error} If the connection is refused, the request times out, or the response
+ *                 cannot be parsed as valid JSON
+ *
+ * @example
+ * ```typescript
+ * const report = await fetchHealthReport({ host: 'localhost', port: 3100 });
+ * console.log(`System status: ${report.status}`);
+ * console.log(`Healthy agents: ${report.agents.filter(a => a.healthy).length}`);
+ * ```
  */
 export async function fetchHealthReport(options: HealthClientOptions = {}): Promise<HealthReport> {
   const host = options.host || 'localhost';
@@ -74,11 +86,26 @@ export async function fetchHealthReport(options: HealthClientOptions = {}): Prom
 }
 
 /**
- * Check if a health server is available at the specified host/port
- * 
+ * Check if a Qwen Loop health server is available at the specified host/port
+ *
+ * Attempts to connect to the health endpoint and retrieve a report.
+ * Returns `true` if the server responds successfully, `false` otherwise
+ * (including connection refused, timeout, or parse errors).
+ *
  * @param host - Hostname to check (default: 'localhost')
  * @param port - Port number to check (default: 3100)
- * @returns Promise resolving to true if server is available, false otherwise
+ * @returns Promise resolving to `true` if server is reachable and responding,
+ *          `false` if unavailable or an error occurs
+ *
+ * @example
+ * ```typescript
+ * const available = await isHealthServerAvailable('localhost', 3100);
+ * if (available) {
+ *   console.log('Health server is running');
+ * } else {
+ *   console.log('Health server is not available');
+ * }
+ * ```
  */
 export async function isHealthServerAvailable(host = 'localhost', port = 3100): Promise<boolean> {
   try {

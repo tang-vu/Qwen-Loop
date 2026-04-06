@@ -5,18 +5,40 @@ import { logger } from '../logger.js';
 
 /**
  * Custom error class for Git operations.
- * Extends the built-in Error class with additional context about the failed operation.
+ *
+ * Extends the built-in Error class with additional context about the failed
+ * operation, including the command that failed, its exit code, and stderr output.
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await run('git', ['commit', '-m', 'msg'], '/path');
+ * } catch (error) {
+ *   if (error instanceof GitError) {
+ *     console.error(`Command '${error.command}' failed with code ${error.exitCode}`);
+ *     console.error('stderr:', error.stderr);
+ *   }
+ * }
+ * ```
  */
 export class GitError extends Error {
   /** The git command that failed (e.g., 'git add', 'git commit'). */
   public readonly command: string;
 
-  /** The exit code returned by the git process, if available. */
+  /** The exit code returned by the git process, or `null` if the process failed to start. */
   public readonly exitCode: number | null;
 
   /** The combined stderr output from the failed operation. */
   public readonly stderr: string;
 
+  /**
+   * Creates a new GitError instance.
+   *
+   * @param message - Human-readable error description
+   * @param command - The git command that was executed
+   * @param exitCode - The process exit code (0-255), or `null` if not available
+   * @param stderr - The stderr output from the command
+   */
   constructor(
     message: string,
     command: string,
@@ -41,11 +63,14 @@ const DEFAULT_GIT_COMMAND_TIMEOUT_MS = 60_000;
 const ALLOWED_COMMAND = 'git';
 
 /**
- * Ensure .qwen/settings.json exists with YOLO mode enabled
- * This is the official way to set persistent auto-approve per Qwen docs
+ * Ensure .qwen/settings.json exists with YOLO mode enabled for autonomous operation
  *
- * @param cwd - The root working directory where the .qwen folder should reside
+ * Creates the `.qwen` directory if it doesn't exist, then writes a `settings.json`
+ * file that enables YOLO mode (auto-approve) for all shell commands and file edits.
+ *
+ * @param cwd - The root working directory where the `.qwen` folder should reside
  * @throws {GitError} If the directory cannot be created or settings cannot be written
+ *                    (e.g., due to permission errors or disk space issues)
  */
 function ensureYoloSettings(cwd: string): void {
   const qwenDir = join(cwd, '.qwen');

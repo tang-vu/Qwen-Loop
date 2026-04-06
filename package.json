@@ -26,7 +26,6 @@
   "description": "",
   "dependencies": {
     "@inquirer/prompts": "^8.3.2",
-    "@types/node": "^25.5.2",
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
     "tsx": "^4.21.0",
@@ -35,6 +34,7 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
+    "@types/node": "^25.5.2",
     "@types/uuid": "^10.0.0"
   }
 }

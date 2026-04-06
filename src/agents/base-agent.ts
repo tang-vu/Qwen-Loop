@@ -141,9 +141,16 @@ export abstract class BaseAgent implements IAgent {
         logger.warn(`Task failed`, {
           agent: this.name,
           task: task.id,
-          error: result.error?.slice(0, 80)
+          error: result.error?.slice(0, 100)
         });
       }
+
+      logger.debug(`Task execution finished`, {
+        agent: this.name,
+        task: task.id,
+        duration: executionTime,
+        success: result.success
+      });
 
       return result;
     } catch (error) {
@@ -157,7 +164,7 @@ export abstract class BaseAgent implements IAgent {
       logger.error('Task execution error', {
         agent: this.name,
         task: task.id,
-        error: errorMessage
+        error // Pass original Error object to capture stack trace
       });
 
       return {

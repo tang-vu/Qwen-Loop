@@ -48,7 +48,7 @@ export class LoopManager implements ILoopManager {
    */
   async start(): Promise<void> {
     if (this.isLoopRunning) {
-      logger.warn('Loop already running');
+      logger.warn('Loop already running', { iterations: this.loopIterationCount });
       return;
     }
 
@@ -68,7 +68,7 @@ export class LoopManager implements ILoopManager {
         for (const taskDesc of tasks) {
           this.addTask(taskDesc.description, taskDesc.priority, { category: taskDesc.category, selfGenerated: true });
         }
-        logger.info(`Generated ${tasks.length} initial tasks`);
+        logger.info(`Generated ${tasks.length} initial tasks`, { count: tasks.length });
       } catch (error) {
         logger.error('Failed to generate self-directed tasks', { 
           error: error instanceof Error ? error.message : String(error) 
@@ -210,7 +210,10 @@ export class LoopManager implements ILoopManager {
 
   /**
    * Get the task queue instance
-   * @returns The TaskQueue instance
+   *
+   * Provides access to the underlying task queue for inspection and management.
+   *
+   * @returns The TaskQueue instance used by this loop manager.
    */
   getTaskQueue(): TaskQueue {
     return this.taskQueue;
@@ -218,7 +221,10 @@ export class LoopManager implements ILoopManager {
 
   /**
    * Get the orchestrator instance
-   * @returns The AgentOrchestrator instance
+   *
+   * Provides access to the agent orchestrator for registering and managing agents.
+   *
+   * @returns The AgentOrchestrator instance used by this loop manager.
    */
   getOrchestrator(): AgentOrchestrator {
     return this.orchestrator;
@@ -226,7 +232,10 @@ export class LoopManager implements ILoopManager {
 
   /**
    * Get the current configuration
-   * @returns The LoopConfig object
+   *
+   * Returns the loop configuration including agents, intervals, and working directory.
+   *
+   * @returns The LoopConfig object for this loop manager.
    */
   getConfig(): LoopConfig {
     return this.config;
@@ -242,7 +251,10 @@ export class LoopManager implements ILoopManager {
         await this.processLoopIteration();
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error('Error in loop iteration', { error: errorMessage });
+        logger.error('Error in loop iteration', {
+          iteration: this.loopIterationCount,
+          error: errorMessage
+        });
       }
     }, this.config.loopInterval);
 
@@ -251,7 +263,10 @@ export class LoopManager implements ILoopManager {
       await this.processLoopIteration();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error('Error in initial loop iteration', { error: errorMessage });
+      logger.error('Error in initial loop iteration', {
+        iteration: this.loopIterationCount,
+        error: errorMessage
+      });
     }
   }
 
@@ -311,9 +326,11 @@ export class LoopManager implements ILoopManager {
       if (result.success) {
         this.completedTasksCount++;
         this.totalExecutionTime += result.executionTime;
-        logger.info(`Task completed: ${task.description.slice(0, 60)}${task.description.length > 60 ? '...' : ''}`, {
+        logger.info(`Task completed`, {
           task: task.id,
-          duration: result.executionTime
+          agent: task.assignedAgent,
+          duration: result.executionTime,
+          description: task.description.slice(0, 80)
         });
         if (task.assignedAgent) {
           this.healthChecker.trackTaskCompletion(task.assignedAgent, true, result.executionTime);
@@ -323,7 +340,11 @@ export class LoopManager implements ILoopManager {
         const commitMsg = `chore(ai): ${task.description.slice(0, 72)}`;
         const gitResult = await gitCommitPush(commitMsg, this.config.workingDirectory);
         if (!gitResult.success) {
-          logger.warn(`Git operation failed: ${gitResult.output}`, { task: task.id });
+          logger.warn(`Git operation failed`, {
+            task: task.id,
+            agent: task.assignedAgent,
+            output: gitResult.output.slice(0, 100)
+          });
         }
       } else {
         this.failedTasksCount++;
@@ -341,15 +362,18 @@ export class LoopManager implements ILoopManager {
           task.metadata.retryCount = retryCount + 1;
           task.status = TaskStatus.PENDING;
           this.taskQueue.enqueue(task);
-          logger.warn(`Task failed, retrying (${retryCount + 1}/${this.config.maxRetries})`, {
+          logger.warn(`Task failed, retrying`, {
             task: task.id,
+            agent: task.assignedAgent,
             retryCount: retryCount + 1,
             error: result.error?.slice(0, 100)
           });
         } else {
           this.loopIterationCount++; // Count failed retries too
-          logger.error(`Task failed after ${retryCount} retries`, {
+          logger.error(`Task failed after max retries`, {
             task: task.id,
+            agent: task.assignedAgent,
+            retryCount,
             error: result.error
           });
         }
@@ -360,6 +384,7 @@ export class LoopManager implements ILoopManager {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('Task execution error', {
         task: task.id,
+        agent: task.assignedAgent,
         error: errorMessage
       });
 
@@ -395,6 +420,11 @@ export class LoopManager implements ILoopManager {
 
   /**
    * Get the health checker instance for generating health reports
+   *
+   * Updates the health checker with current task queue and agent stats
+   * before returning it.
+   *
+   * @returns The HealthChecker instance for this loop manager.
    */
   getHealthChecker(): HealthChecker {
     this.updateHealthChecker();
@@ -403,16 +433,31 @@ export class LoopManager implements ILoopManager {
 
   /**
    * Get a comprehensive health report
+   *
+   * Generates a detailed report including agent health, task throughput,
+   * resource usage, and priority breakdown.
+   *
+   * @returns A HealthReport object with current system metrics.
    */
   getHealthReport(): HealthReport {
     this.updateHealthChecker();
     return this.healthChecker.getJsonReport();
   }
 
+  /**
+   * Get a formatted status report showing agent states
+   *
+   * @returns A formatted string with agent status information.
+   */
   getAgentStatusReport(): string {
     return this.orchestrator.getAgentStatusReport();
   }
 
+  /**
+   * Get formatted task queue statistics
+   *
+   * @returns A formatted string with task queue metrics.
+   */
   getTaskQueueStats(): string {
     return this.taskQueue.getQueueStats();
   }

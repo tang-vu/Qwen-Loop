@@ -55,7 +55,7 @@ export class QwenAgent extends BaseAgent {
     this.workingDir = config.workingDirectory || process.cwd();
 
     if (!existsSync(this.workingDir)) {
-      logger.debug(`Creating working directory`, { agent: this.name, path: this.workingDir });
+      logger.debug(`Creating working directory`, { agent: this.name, workingDir: this.workingDir });
       mkdirSync(this.workingDir, { recursive: true });
     }
   }
@@ -79,7 +79,7 @@ export class QwenAgent extends BaseAgent {
       });
 
       checkProcess.on('close', (code: number | null) => {
-        logger.debug(`Qwen Code CLI check complete`, { agent: this.name, exitCode: code });
+        logger.debug(`Qwen Code CLI check process exited`, { agent: this.name, exitCode: code });
         resolve();
       });
 
@@ -143,7 +143,7 @@ export class QwenAgent extends BaseAgent {
 
         // Log only significant output (errors or substantial content)
         if (text.length > 50 && !text.includes('Progress')) {
-          logger.debug(`Agent output received`, { agent: this.name, task: task.id, length: text.length });
+          logger.debug(`Agent output received`, { agent: this.name, task: task.id, length: text.length }, 10000);
         }
 
         // Try to detect file operations from output
@@ -155,7 +155,7 @@ export class QwenAgent extends BaseAgent {
         errorOutput += text;
         // Only log stderr if it's significant (not just warnings)
         if (!text.includes('Warning') && !text.includes('warning')) {
-          logger.debug(`Agent stderr received`, { agent: this.name, task: task.id, length: text.length });
+          logger.debug(`Agent stderr received`, { agent: this.name, task: task.id, length: text.length }, 10000);
         }
       });
 

@@ -1,4 +1,4 @@
-import { LoopConfig, LoopStats, ProjectConfig, AgentConfig, AgentType, TaskPriority, TaskStatus, HealthReport, AgentHealthStatus, Task } from '../types.js';
+import { LoopConfig, LoopStats, ProjectConfig, AgentConfig, AgentType, TaskPriority, TaskStatus, HealthReport, AgentHealthStatus, Task, IAgent } from '../types.js';
 import { LoopManager } from './loop-manager.js';
 import { QwenAgent, CustomAgent } from '../agents/index.js';
 import { logger } from '../logger.js';

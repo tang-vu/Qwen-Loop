@@ -76,28 +76,39 @@ export class HealthServer {
    * Handle incoming HTTP requests and route to appropriate handlers
    */
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
-    const requestUrl = req.url ?? '/';
-    const url = new URL(requestUrl, `http://${this.host}:${this.port}`);
-    const path = url.pathname;
-
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
-
-    if (req.method !== 'GET') {
-      res.writeHead(405, { 'Content-Type': 'text/plain' });
-      res.end('Method Not Allowed');
-      return;
-    }
-
     try {
+      const requestUrl = req.url ?? '/';
+      let url: URL;
+      
+      try {
+        url = new URL(requestUrl, `http://${this.host}:${this.port}`);
+      } catch (urlError) {
+        // Malformed URL - return 400 Bad Request instead of 500
+        logger.debug(`Malformed URL in health server request: ${requestUrl}`, { error: urlError instanceof Error ? urlError.message : String(urlError) });
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        res.end('Bad Request: Invalid URL');
+        return;
+      }
+      
+      const path = url.pathname;
+
+      // Set CORS headers
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      if (req.method !== 'GET') {
+        res.writeHead(405, { 'Content-Type': 'text/plain' });
+        res.end('Method Not Allowed');
+        return;
+      }
+
       switch (path) {
         case '/health':
         case '/health/':

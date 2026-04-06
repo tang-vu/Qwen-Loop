@@ -54,7 +54,8 @@ export class TaskQueue implements ITaskQueue {
       queue.push(task);
       logger.debug(`Task enqueued`, { task: task.id, priority: task.priority });
     } else {
-      logger.error(`Invalid priority level`, { task: task.id, priority: task.priority });
+      // This should be unreachable if TaskPriority enum is used correctly
+      throw new Error(`TaskQueue.enqueue: invalid priority level "${task.priority}" for task "${task.id}"`);
     }
   }
 
@@ -79,7 +80,7 @@ export class TaskQueue implements ITaskQueue {
       const queue = this.priorityQueues.get(priority);
       if (queue && queue.length > 0) {
         const task = queue.shift()!;
-        logger.debug(`Task dequeued: ${task.priority}`, { task: task.id });
+        logger.debug(`Task dequeued`, { task: task.id, priority: task.priority });
         return task;
       }
     }
@@ -149,13 +150,16 @@ export class TaskQueue implements ITaskQueue {
    * Retrieve all tasks that match a specific status.
    *
    * Searches through all tasks tracked by the queue (not just pending ones) and
-   * returns those whose `status` matches the provided value.
+   * returns shallow copies of those whose `status` matches the provided value.
+   * Returning copies prevents external mutation of internal task state.
    *
    * @param status - The task status to filter by (e.g., `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`).
-   * @returns An array of tasks with the specified status. Returns an empty array if none match.
+   * @returns An array of task copies with the specified status. Returns an empty array if none match.
    */
   getTasksByStatus(status: TaskStatus): Task[] {
-    return Array.from(this.tasks.values()).filter(task => task.status === status);
+    return Array.from(this.tasks.values())
+      .filter(task => task.status === status)
+      .map(task => ({ ...task })); // Return shallow copies to prevent external mutation
   }
 
   /**
@@ -163,21 +167,25 @@ export class TaskQueue implements ITaskQueue {
    *
    * This includes tasks in every state (pending, running, completed, failed),
    * not just those still waiting in the priority queues.
+   * Returns shallow copies to prevent external mutation of internal state.
    *
-   * @returns An array of all tasks regardless of their current status.
+   * @returns An array of task copies regardless of their current status.
    */
   getAllTasks(): Task[] {
-    return Array.from(this.tasks.values());
+    return Array.from(this.tasks.values()).map(task => ({ ...task })); // Return shallow copies
   }
 
   /**
    * Retrieve a specific task by its unique identifier.
    *
+   * Returns a shallow copy of the task to prevent external mutation of internal state.
+   *
    * @param taskId - The unique identifier of the task to look up.
-   * @returns The matching `Task` if found, or `undefined` if no task with the given ID exists.
+   * @returns A copy of the matching `Task` if found, or `undefined` if no task with the given ID exists.
    */
   getTaskById(taskId: string): Task | undefined {
-    return this.tasks.get(taskId);
+    const task = this.tasks.get(taskId);
+    return task ? { ...task } : undefined; // Return shallow copy
   }
 
   /**
@@ -197,7 +205,7 @@ export class TaskQueue implements ITaskQueue {
       throw new Error(`TaskQueue.updateTaskStatus: no task found with id "${taskId}")`);
     }
     task.status = status;
-    logger.debug(`Task "${taskId}" status updated to ${status}`, { task: taskId });
+    logger.debug(`Task status updated`, { task: taskId, status });
   }
 
   /**

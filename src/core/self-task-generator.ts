@@ -194,7 +194,27 @@ export class SelfTaskGenerator {
 
     // All tasks completed, regenerate pool
     this.taskPool = this.generateTasks(analysis);
-    return this.getNextTask(analysis); // Recursive to get from new pool
+    this.completedTasks = []; // Clear completed to avoid infinite loop
+    
+    // Get from new pool (iterative, not recursive)
+    if (this.taskPool.length > 0) {
+      const task = this.taskPool.shift()!;
+      const signature = task.category + task.description.slice(0, 30);
+      this.completedTasks.push(signature);
+      
+      return {
+        id: uuidv4(),
+        description: task.description,
+        priority: task.priority,
+        status: TaskStatus.PENDING,
+        createdAt: new Date(),
+        metadata: { category: task.category, selfGenerated: true }
+      };
+    }
+    
+    // Should never reach here unless generateTasks returns empty
+    logger.warn('No tasks available from SelfTaskGenerator');
+    return null;
   }
 
   /**

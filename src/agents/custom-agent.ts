@@ -57,7 +57,7 @@ export class CustomAgent extends BaseAgent {
     this.workingDir = config.workingDirectory || process.cwd();
 
     if (!existsSync(this.workingDir)) {
-      logger.debug(`Creating working directory`, { agent: this.name, path: this.workingDir });
+      logger.debug(`Creating working directory`, { agent: this.name, workingDir: this.workingDir });
       mkdirSync(this.workingDir, { recursive: true });
     }
   }
@@ -146,7 +146,7 @@ export class CustomAgent extends BaseAgent {
         output += text;
         // Log only significant output
         if (text.length > 50 && !text.includes('Progress')) {
-          logger.debug(`Agent output received`, { agent: this.name, task: task.id, length: text.length });
+          logger.debug(`Agent output received`, { agent: this.name, task: task.id, length: text.length }, 10000);
         }
         this.parseFileOperations(text, filesModified, filesCreated);
       });
@@ -156,7 +156,7 @@ export class CustomAgent extends BaseAgent {
         errorOutput += text;
         // Only log stderr if it's significant (not just warnings)
         if (!text.includes('Warning') && !text.includes('warning')) {
-          logger.debug(`Agent stderr received`, { agent: this.name, task: task.id, length: text.length });
+          logger.debug(`Agent stderr received`, { agent: this.name, task: task.id, length: text.length }, 10000);
         }
       });
 

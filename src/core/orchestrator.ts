@@ -31,7 +31,7 @@ export class AgentOrchestrator implements IAgentOrchestrator {
     if (agent) {
       // Cancel any running tasks
       agent.cancelTask().catch((error) => {
-        logger.error(`Error cancelling task for agent ${agent.name}`, {
+        logger.error(`Error cancelling task during agent removal`, {
           agent: agent.name,
           error
         });
@@ -170,7 +170,7 @@ export class AgentOrchestrator implements IAgentOrchestrator {
 
     await Promise.all(initPromises);
 
-    logger.info('Agent initialization complete');
+    logger.info('Agent initialization complete', { count: this.agents.size });
   }
 
   /**
@@ -182,7 +182,7 @@ export class AgentOrchestrator implements IAgentOrchestrator {
       try {
         await agent.cancelTask();
       } catch (error) {
-        logger.error(`Error cancelling task for agent ${agent.name}`, {
+        logger.error(`Error cancelling task during bulk cancel`, {
           agent: agent.name,
           error
         });

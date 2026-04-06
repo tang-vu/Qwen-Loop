@@ -2,6 +2,35 @@ import winston from 'winston';
 import chalk from 'chalk';
 
 /**
+ * Valid log levels supported by the logger
+ */
+export const LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
+export type LogLevel = typeof LOG_LEVELS[number];
+
+/**
+ * Log rotation configuration
+ * Can be used to customize file transport behavior
+ */
+export interface LogRotationConfig {
+  /** Log file directory path */
+  dirname?: string;
+  /** Log file name */
+  filename?: string;
+  /** Maximum size of each log file in bytes */
+  maxsize: number;
+  /** Maximum number of log files to keep */
+  maxFiles: number;
+}
+
+/** Default log rotation configuration */
+export const DEFAULT_LOG_ROTATION: LogRotationConfig = {
+  dirname: 'logs',
+  filename: 'qwen-loop.log',
+  maxsize: 5242880, // 5MB
+  maxFiles: 5
+};
+
+/**
  * Extended log metadata that can be attached to log messages
  */
 export interface LogMetadata {
@@ -15,6 +44,8 @@ export interface LogMetadata {
   duration?: number;
   /** Error object for error logs */
   error?: Error | unknown;
+  /** Task description snippet (auto-truncated) */
+  description?: string;
   /** Additional custom metadata */
   [key: string]: unknown;
 }
@@ -84,11 +115,12 @@ class Logger {
     const consoleFormat = winston.format.combine(
       winston.format.colorize(),
       winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-      winston.format.printf(({ timestamp, level, message, agent, task, project, duration, ...meta }) => {
+      winston.format.printf(({ timestamp, level, message, agent, task, project, duration, description, ...meta }) => {
         const agentTag = agent ? chalk.cyan(`[${agent}]`) : '';
-        const taskTag = task ? chalk.yellow(`[Task:${task.slice(0, 8)}]`) : '';
+        const taskTag = task ? chalk.yellow(`[Task:${String(task).slice(0, 8)}]`) : '';
         const projectTag = project ? chalk.magenta(`[${project}]`) : '';
         const durationTag = duration !== undefined ? chalk.green(`[${this.formatDuration(duration as number)}]`) : '';
+        const descTag = description ? chalk.white(`"${description}"`) : '';
 
         const levels: Record<string, string> = {
           error: chalk.red('ERROR'),
@@ -99,8 +131,12 @@ class Logger {
 
         let logLine = `${chalk.gray(timestamp)} ${levels[level]} ${agentTag}${projectTag}${taskTag}${durationTag} ${message}`;
 
+        if (descTag) {
+          logLine += ` ${descTag}`;
+        }
+
         // Add only essential metadata to console (not everything)
-        const essentialKeys = ['priority', 'retryCount', 'status', 'count'];
+        const essentialKeys = ['priority', 'retryCount', 'status', 'count', 'exitCode', 'length'];
         const essentialMeta = Object.entries(meta).filter(([key]) =>
           essentialKeys.includes(key)
         );
@@ -119,7 +155,7 @@ class Logger {
       winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
       winston.format.errors({ stack: true }),
       winston.format((info) => {
-        const structured: StructuredLogEntry = {
+        const structured: any = {
           timestamp: String(info.timestamp || ''),
           level: info.level,
           message: String(info.message || '')
@@ -131,15 +167,20 @@ class Logger {
         if (info.duration !== undefined && info.duration !== null) {
           structured.duration = Number(info.duration);
         }
+        if (info.description) {
+          structured.description = typeof info.description === 'string'
+            ? info.description.slice(0, 200)
+            : String(info.description);
+        }
         if (info.error) {
           structured.error = info.error instanceof Error ? (info.error.stack || info.error.message) : String(info.error);
         }
 
         // Add remaining metadata with truncation for long strings
         Object.entries(info).forEach(([key, value]) => {
-          if (!['timestamp', 'level', 'message', 'agent', 'task', 'project', 'duration', 'error', Symbol.for('level')].includes(key)) {
-            structured[key] = typeof value === 'string' && value.length > 1000 
-              ? `${value.slice(0, 1000)}... [truncated]` 
+          if (!['timestamp', 'level', 'message', 'agent', 'task', 'project', 'duration', 'description', 'error', Symbol.for('level')].includes(key)) {
+            structured[key] = typeof value === 'string' && value.length > 1000
+              ? `${value.slice(0, 1000)}... [truncated]`
               : value;
           }
         });
@@ -165,14 +206,14 @@ class Logger {
       transports: [
         new winston.transports.Console({
           format: consoleFormat,
-          // Reduce debug output verbosity in console
           silent: false
         }),
         new winston.transports.File({
-          filename: 'logs/qwen-loop.log',
+          dirname: DEFAULT_LOG_ROTATION.dirname,
+          filename: `${DEFAULT_LOG_ROTATION.dirname}/${DEFAULT_LOG_ROTATION.filename}`,
           format: fileFormat,
-          maxsize: 5242880, // 5MB
-          maxFiles: 5,
+          maxsize: DEFAULT_LOG_ROTATION.maxsize,
+          maxFiles: DEFAULT_LOG_ROTATION.maxFiles,
           tailable: true
         })
       ]
@@ -281,8 +322,12 @@ export const logger = Logger.getInstance();
 /**
  * Set the global log level
  * @param level - The logging level to use
+ * @throws Error if the log level is invalid
  */
-export function setLogLevel(level: 'error' | 'warn' | 'info' | 'debug') {
+export function setLogLevel(level: LogLevel) {
+  if (!LOG_LEVELS.includes(level)) {
+    throw new Error(`Invalid log level: "${level}". Must be one of: ${LOG_LEVELS.join(', ')}`);
+  }
   Logger.getInstance(level);
 }
 

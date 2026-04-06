@@ -22,23 +22,27 @@ const DEFAULT_CONFIG: Partial<LoopConfig> = {
 export class ConfigManager {
   private configPath: string;
   private config: LoopConfig;
+  private configLoadedFromFile: boolean;
 
   /**
    * Create a new ConfigManager
    * @param configPath - Optional path to configuration file (defaults to qwen-loop.config.json in CWD)
+   * @param strictMode - If true, throws errors on invalid config instead of falling back to defaults
    */
-  constructor(configPath?: string) {
+  constructor(configPath?: string, strictMode: boolean = false) {
     this.configPath = configPath || join(process.cwd(), 'qwen-loop.config.json');
-    this.config = this.loadConfig();
+    this.configLoadedFromFile = false;
+    this.config = this.loadConfig(strictMode);
   }
 
-  private loadConfig(): LoopConfig {
+  private loadConfig(strictMode: boolean = false): LoopConfig {
     if (existsSync(this.configPath)) {
       try {
         const configData = readFileSync(this.configPath, 'utf-8');
         const config = JSON.parse(configData);
 
         logger.debug(`Configuration loaded from ${this.configPath}`);
+        this.configLoadedFromFile = true;
 
         return {
           ...DEFAULT_CONFIG,
@@ -48,6 +52,12 @@ export class ConfigManager {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error(`Failed to load configuration: ${errorMessage}`);
+        
+        if (strictMode) {
+          throw new Error(`Failed to parse configuration file at ${this.configPath}: ${errorMessage}`);
+        }
+        
+        logger.warn('Falling back to default configuration due to parse error');
         return this.getDefaultConfig();
       }
     } else {
@@ -95,6 +105,14 @@ export class ConfigManager {
    */
   getConfig(): LoopConfig {
     return this.config;
+  }
+
+  /**
+   * Check if the configuration was successfully loaded from a file
+   * @returns True if config file exists and was parsed, false if using defaults
+   */
+  isConfigLoadedFromFile(): boolean {
+    return this.configLoadedFromFile;
   }
 
   /**

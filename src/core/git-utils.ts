@@ -238,8 +238,8 @@ export async function gitCommitPush(
     // git add -A
     await run('git', ['add', '-A'], cwd);
 
-    // git commit
-    await run('git', ['commit', '-m', message], cwd);
+    // git commit - wrap message in quotes to handle spaces
+    await run('git', ['commit', '-m', `"${message}"`], cwd);
     logger.debug(`Committed: ${message.slice(0, 50)}...`);
 
     // git push

@@ -21,6 +21,9 @@ export class HealthChecker {
   private taskQueue: Map<string, { status: TaskStatus; priority: TaskPriority }> = new Map();
   private agentTaskCounts: Map<string, { total: number; failed: number }> = new Map();
   private agentLastTaskTime: Map<string, number> = new Map();
+  private lastCpuUsage: number = 0;
+  private lastCpuCheck: number = 0;
+  private cpuCheckInterval: NodeJS.Timeout | null = null;
 
   /**
    * Update the health checker with current agent information.
@@ -409,28 +412,40 @@ export class HealthChecker {
   /**
    * Estimate CPU usage synchronously based on process CPU time deltas.
    *
-   * Takes two quick CPU usage samples 50ms apart and computes the percentage
-   * of CPU time consumed by the current process during that window. This is a
-   * lightweight approximation used as a fallback when system-level commands fail.
+   * Returns a cached value if available (measured within last 5 seconds),
+   * otherwise performs a quick 10ms measurement.
    *
    * @returns Estimated CPU usage percentage (0-100) for the current process.
    */
   private estimateCpuUsage(): number {
+    // Return cached value if measured recently (within 5 seconds)
+    const now = Date.now();
+    if (this.lastCpuCheck > 0 && (now - this.lastCpuCheck) < 5000) {
+      return this.lastCpuUsage;
+    }
+
     const startUsage = process.cpuUsage();
     const start = Date.now();
-
-    // Block briefly to get a measurable delta (synchronous estimation)
-    const measureDurationMs = 50;
+    
+    // Short measurement window (10ms instead of 50ms)
+    const measureDurationMs = 10;
     const end = start + measureDurationMs;
+    
+    // Minimal busy-wait with reduced duration
     while (Date.now() < end) {
-      // Busy-wait for the measurement window
+      // Tight loop for minimal measurement window
     }
 
     const endUsage = process.cpuUsage(startUsage);
     const elapsed = Date.now() - start;
     const totalCpuTime = (endUsage.user + endUsage.system) / 1000; // Convert microseconds to ms
-    const cpuPercent = (totalCpuTime / elapsed) * 100;
-    return Math.min(cpuPercent, 100);
+    const cpuPercent = elapsed > 0 ? (totalCpuTime / elapsed) * 100 : 0;
+    
+    // Cache the result
+    this.lastCpuUsage = Math.min(cpuPercent, 100);
+    this.lastCpuCheck = now;
+    
+    return this.lastCpuUsage;
   }
 
   private getTaskThroughput(): TaskThroughput {

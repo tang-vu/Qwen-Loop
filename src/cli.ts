@@ -16,14 +16,16 @@ import { confirm, input, select } from '@inquirer/prompts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const packageJson: { version: string } = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
+const packageJson: { version: string } = JSON.parse(
+  readFileSync(join(__dirname, '..', 'package.json'), 'utf-8')
+);
 
 // Track if color output should be disabled
 let enableColors = true;
 
 // Setup global error handlers
 process.on('uncaughtException', (error) => {
-  const msg = enableColors ? chalk.red('✖ Error') : '✖ Error';
+  const msg = enableColors ? chalk.red.bold('✖ Error') : '✖ Error';
   const detail = enableColors ? chalk.gray : (s: string) => s;
   console.error(`\n${msg}: ${error.message || 'An unexpected error occurred'}`);
   console.error(detail('\nThis is likely a bug. Please report it at:'));
@@ -33,13 +35,41 @@ process.on('uncaughtException', (error) => {
 
 process.on('unhandledRejection', (reason) => {
   const message = reason instanceof Error ? reason.message : String(reason);
-  const msg = enableColors ? chalk.red('✖ Error') : '✖ Error';
+  const msg = enableColors ? chalk.red.bold('✖ Error') : '✖ Error';
   const detail = enableColors ? chalk.gray : (s: string) => s;
   console.error(`\n${msg}: ${message}`);
   console.error(detail('\nThis is likely a bug. Please report it at:'));
   console.error('  https://github.com/tang-vu/Qwen-Loop/issues\n');
   process.exit(1);
 });
+
+/**
+ * Helper: Get command descriptions for help text
+ */
+function getCommandSummary(): string {
+  const cmd = (text: string) => enableColors ? chalk.yellow(text) : text;
+  const bold = (text: string) => enableColors ? chalk.bold(text) : text;
+  const dim = (text: string) => enableColors ? chalk.dim(text) : text;
+
+  const commands = [
+    { name: 'init', desc: 'Create configuration file (single project)', alias: '' },
+    { name: 'init-multi', desc: 'Create multi-project configuration file', alias: '' },
+    { name: 'start', desc: 'Start the agent loop', alias: 'run' },
+    { name: 'add-task', desc: 'Add a task to the queue', alias: 'add' },
+    { name: 'status', desc: 'Show current status of agents and tasks', alias: 'st' },
+    { name: 'health', desc: 'Show system health status', alias: '' },
+    { name: 'config', desc: 'Show current configuration details', alias: '' },
+    { name: 'validate', desc: 'Validate configuration and check for issues', alias: 'val' },
+  ];
+
+  const lines = commands.map(c => {
+    const cmdText = cmd(c.name.padEnd(12));
+    const aliasText = c.alias ? dim(` (${c.alias})`) : '';
+    return `  ${cmdText} ${bold(c.desc)}${aliasText}`;
+  });
+
+  return lines.join('\n');
+}
 
 const program = new Command();
 
@@ -56,8 +86,8 @@ program
     }
   })
   .addHelpText('beforeAll', () => {
-    const banner = enableColors 
-      ? `\n${chalk.bold.cyan('🤖 Qwen Loop')} ${chalk.gray(`v${packageJson.version}`)} - Autonomous Multi-Agent Loop System`
+    const banner = enableColors
+      ? `\n${chalk.bold.cyan('🤖 Qwen Loop')} ${chalk.dim(`v${packageJson.version}`)} - Autonomous Multi-Agent Loop System`
       : `\n🤖 Qwen Loop v${packageJson.version} - Autonomous Multi-Agent Loop System`;
     return banner + '\n';
   })
@@ -72,33 +102,47 @@ program
   })
   .addHelpText('after', () => {
     const cmd = (text: string) => enableColors ? chalk.yellow(text) : text;
-    const tip = (text: string) => enableColors ? chalk.bold('💡 Tips:') : '💡 Tips:';
-    const res = (text: string) => enableColors ? chalk.bold('📚 Resources:') : '📚 Resources:';
-    const gray = (text: string) => enableColors ? chalk.gray(text) : text;
+    const bold = (text: string) => enableColors ? chalk.bold(text) : text;
+    const dim = (text: string) => enableColors ? chalk.dim(text) : text;
     const cyan = (text: string) => enableColors ? chalk.cyan(text) : text;
-    
-    return `
-${tip('')}
-  • Run ${cmd('qwen-loop init')} to create your first configuration file
-  • Use ${cmd('qwen-loop init --interactive')} for guided setup
-  • Try ${cmd('qwen-loop validate')} to check your configuration for issues
-  • Add ${cmd('--json')} to health and status commands for script-friendly output
-  • Press ${cmd('Ctrl+C')} to gracefully stop the agent loop
+    const gray = (text: string) => enableColors ? chalk.gray(text) : text;
 
-${res('')}
+    const quickStart = enableColors
+      ? chalk.bold.cyan('🚀 Quick Start:')
+      : '🚀 Quick Start:';
+
+    const tips = enableColors ? chalk.bold('💡 Tips:') : '💡 Tips:';
+    const resources = enableColors ? chalk.bold('📚 Resources:') : '📚 Resources:';
+    const examples = enableColors ? chalk.bold('📖 Example Usage:') : '📖 Example Usage:';
+
+    return `
+${getCommandSummary()}
+
+${quickStart}
+  ${dim('1.')} Create config: ${cmd('qwen-loop init --interactive')}
+  ${dim('2.')} Validate:      ${cmd('qwen-loop validate')}
+  ${dim('3.')} Start loop:    ${cmd('qwen-loop start')}
+
+${tips}
+  • Use ${cmd('--interactive')} flag for guided setup on init commands
+  • Press ${cmd('Ctrl+C')} to gracefully stop the agent loop
+  • Add ${cmd('--json')} to status/health/config for script-friendly output
+  • Run ${cmd('qwen-loop <command> --help')} for command-specific help
+
+${resources}
   Documentation  ${cyan('https://github.com/tang-vu/Qwen-Loop#readme')}
   Report Issues  ${cyan('https://github.com/tang-vu/Qwen-Loop/issues')}
 
-${enableColors ? chalk.bold('📖 Example Usage:') : '📖 Example Usage:'}
+${examples}
   ${gray('# Create configuration interactively')}
   ${cmd('qwen-loop init --interactive')}
-  
+
   ${gray('# Start the agent loop with health check on port 8080')}
   ${cmd('qwen-loop start --health-port 8080')}
-  
+
   ${gray('# Add a high-priority task')}
   ${cmd('qwen-loop add-task "Fix login bug" --priority high')}
-  
+
   ${gray('# Check system health in JSON format')}
   ${cmd('qwen-loop health --json')}
 `;
@@ -108,38 +152,42 @@ ${enableColors ? chalk.bold('📖 Example Usage:') : '📖 Example Usage:'}
  * Helper: Display error message with optional suggestion
  */
 function displayError(message: string, suggestion?: string): void {
-  const errorLabel = enableColors ? `${chalk.red('✖ Error')}` : '✖ Error';
-  const suggestionLabel = enableColors ? chalk.gray('💡 Suggestion:') : '💡 Suggestion:';
-  
+  const errorLabel = enableColors ? `${chalk.red.bold('✖ Error')}` : '✖ Error';
+  const suggestionLabel = enableColors ? chalk.dim('💡 Suggestion:') : '💡 Suggestion:';
+
   console.error(`\n${errorLabel}: ${message}`);
   if (suggestion) {
     console.error(`\n${suggestionLabel} ${suggestion}`);
   }
-  console.error('');
+  console.error(enableColors ? chalk.dim('\nRun "qwen-loop --help" for usage information.\n') : '\nRun "qwen-loop --help" for usage information.\n');
 }
 
 /**
  * Helper: Display success message
  */
 function displaySuccess(message: string): void {
-  const successLabel = enableColors ? chalk.green('✓') : '✓';
-  console.log(`\n${successLabel} ${message}\n`);
+  const successLabel = enableColors ? chalk.green.bold('✓ Success') : '✓ Success';
+  console.log(`\n${successLabel}: ${message}\n`);
 }
 
 /**
  * Helper: Display warning message
  */
-function displayWarning(message: string): void {
-  const warningLabel = enableColors ? chalk.yellow('⚠ Warning:') : '⚠ Warning:';
-  console.log(`\n${warningLabel} ${message}\n`);
+function displayWarning(message: string, suggestion?: string): void {
+  const warningLabel = enableColors ? chalk.yellow.bold('⚠ Warning') : '⚠ Warning:';
+  console.log(`\n${warningLabel}: ${message}`);
+  if (suggestion) {
+    console.log(enableColors ? chalk.dim(`  ${suggestion}`) : `  ${suggestion}`);
+  }
+  console.log('');
 }
 
 /**
  * Helper: Display info message
  */
 function displayInfo(message: string): void {
-  const infoLabel = enableColors ? chalk.cyan('ℹ Info:') : 'ℹ Info:';
-  console.log(`\n${infoLabel} ${message}\n`);
+  const infoLabel = enableColors ? chalk.cyan.bold('ℹ Info') : 'ℹ Info:';
+  console.log(`\n${infoLabel}: ${message}\n`);
 }
 
 /**
@@ -150,10 +198,24 @@ function requireConfig(configManager: ConfigManager): void {
     const configPath = configManager['configPath'];
     displayError(
       `Configuration file not found at ${configPath}`,
-      `Run 'qwen-loop init' to create a configuration file, or specify one with --config <path>`
+      `Run 'qwen-loop init' to create a configuration file, or specify one with -c, --config <path>`
     );
     process.exit(1);
   }
+}
+
+/**
+ * Helper: Validate that a directory exists, with helpful error message
+ */
+function requireDirectory(dirPath: string, context: string): boolean {
+  if (!existsSync(dirPath)) {
+    displayError(
+      `Directory does not exist: ${dirPath}`,
+      `Create the directory or update the ${context} configuration`
+    );
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -248,7 +310,7 @@ program
           ? `\n${chalk.bold.cyan('🔧 Interactive Configuration Setup')}`
           : `\n🔧 Interactive Configuration Setup`);
         console.log(enableColors
-          ? chalk.gray('Answer the following questions to set up your project\n')
+          ? chalk.dim('Answer the following questions to set up your project\n')
           : 'Answer the following questions to set up your project\n');
 
         // Ask for working directory
@@ -261,11 +323,19 @@ program
           }
         });
 
+        // Validate directory path format
+        if (workingDir.includes('..')) {
+          displayWarning(
+            'Relative parent directory paths can be error-prone',
+            'Make sure the path resolves to your intended directory'
+          );
+        }
+
         // Ask for agent type
         const agentType = await select({
           message: enableColors ? chalk.white('Select agent type:') : 'Select agent type:',
           choices: [
-            { name: 'Qwen - Use Qwen AI model', value: AgentType.QWEN },
+            { name: 'Qwen - Use Qwen AI model (recommended)', value: AgentType.QWEN },
             { name: 'Custom - Custom agent implementation', value: AgentType.CUSTOM },
           ]
         });
@@ -274,7 +344,11 @@ program
         const agentName = await input({
           message: enableColors ? chalk.white('Agent name:') : 'Agent name:',
           default: agentType === AgentType.QWEN ? 'qwen-dev' : 'custom-agent',
-          validate: (value) => value.trim() ? true : 'Agent name cannot be empty'
+          validate: (value) => {
+            if (!value.trim()) return 'Agent name cannot be empty';
+            if (value.trim().length < 3) return 'Agent name must be at least 3 characters';
+            return true;
+          }
         });
 
         // Ask for max concurrent tasks
@@ -339,25 +413,40 @@ program
       writeFileSync(configPath, configData);
       displaySuccess(`Configuration file created at ${chalk.cyan(configPath)}`);
 
-      console.log(enableColors ? chalk.bold('\n📝 Next steps:') : '\n📝 Next steps:');
-      console.log(enableColors ? chalk.gray('  1. Edit the configuration file if needed:') : '  1. Edit the configuration file if needed:');
+      console.log(enableColors ? chalk.bold.cyan('\n📝 Next steps:') : '\n📝 Next steps:');
+      console.log(enableColors ? chalk.dim('  1. Edit the configuration file if needed:') : '  1. Edit the configuration file if needed:');
       console.log(enableColors ? chalk.cyan(`     ${configPath}`) : `     ${configPath}`);
-      console.log(enableColors ? chalk.gray('  2. Validate your configuration:') : '  2. Validate your configuration:');
+      console.log(enableColors ? chalk.dim('  2. Validate your configuration:') : '  2. Validate your configuration:');
       console.log(enableColors ? chalk.yellow('     qwen-loop validate') : '     qwen-loop validate');
-      console.log(enableColors ? chalk.gray('  3. Start the agent loop:') : '  3. Start the agent loop:');
+      console.log(enableColors ? chalk.dim('  3. Start the agent loop:') : '  3. Start the agent loop:');
       console.log(enableColors ? chalk.yellow('     qwen-loop start\n') : '     qwen-loop start\n');
     } catch (error) {
       if (error instanceof Error && error.message === 'User force closed the prompt') {
-        console.log(enableColors 
-          ? chalk.gray('\n\n⚠ Configuration cancelled by user.\n')
+        console.log(enableColors
+          ? chalk.dim('\n\n⚠ Configuration cancelled by user.\n')
           : '\n\n⚠ Configuration cancelled by user.\n');
         process.exit(0);
       }
+      
       const message = error instanceof Error ? error.message : String(error);
-      displayError(
-        `Failed to create configuration file: ${message}`, 
-        'Check that you have write permissions in the current directory'
-      );
+      
+      // Provide specific error messages
+      if (message.includes('EPERM') || message.includes('EACCES')) {
+        displayError(
+          'Permission denied when writing configuration file',
+          `Check that you have write permissions for the current directory or run with elevated privileges`
+        );
+      } else if (message.includes('ENOSPC')) {
+        displayError(
+          'No space left on device',
+          'Free up disk space and try again'
+        );
+      } else {
+        displayError(
+          `Failed to create configuration file: ${message}`,
+          'Check that you have write permissions in the current directory'
+        );
+      }
       process.exit(1);
     }
   });
@@ -541,14 +630,20 @@ program
 program
   .command('start')
   .description('Start the agent loop (auto-detects single or multi-project mode)')
+  .alias('run')
   .option('-c, --config <path>', 'Path to configuration file (default: ./qwen-loop.config.json)')
   .option('--auto-start', 'Automatically start processing tasks')
   .option('--health-port <port>', 'Enable HTTP health check server on specified port', parseInt)
+  .addHelpText('after', () => {
+    const examples = getCommandExamples('start');
+    return enableColors
+      ? `\n${chalk.bold('📝 Examples:')}\n  ${examples}\n`
+      : `\n📝 Examples:\n  ${examples}\n`;
+  })
   .action(async (opts) => {
     try {
       const configManager = new ConfigManager(opts.config);
-      const config = configManager.getConfig();
-
+      
       // Check if config file was loaded or using defaults
       if (!existsSync(configManager['configPath'])) {
         displayError(
@@ -558,33 +653,38 @@ program
         process.exit(1);
       }
 
+      const config = configManager.getConfig();
+
+      console.log(enableColors ? `\n${chalk.bold.cyan('🚀 Starting Qwen Loop...')}` : '\n🚀 Starting Qwen Loop...');
+      console.log(enableColors ? chalk.dim(`  Config: ${configManager['configPath']}`) : `  Config: ${configManager['configPath']}`);
+
       // Set log level
       setLogLevel(config.logLevel);
 
       // Validate configuration
       const errors = configManager.validateConfig();
       if (errors.length > 0) {
-        console.error(`\n${chalk.yellow('⚠ Configuration Issues:')} (${errors.length} found)`);
-        errors.forEach(err => console.error(`  ${chalk.red('•')} ${err}`));
-        
+        console.error(`\n${enableColors ? chalk.yellow.bold('⚠ Configuration Issues:') : '⚠ Configuration Issues:'} (${errors.length} found)`);
+        errors.forEach(err => console.error(`  ${enableColors ? chalk.red('•') : '•'} ${err}`));
+
         // Ask user if they want to continue
         try {
           const shouldContinue = await confirm({
-            message: chalk.yellow('\nDo you want to continue anyway? (not recommended)'),
+            message: enableColors ? chalk.yellow('\nDo you want to continue anyway? (not recommended)') : '\nDo you want to continue anyway? (not recommended)',
             default: false
           });
-          
+
           if (!shouldContinue) {
-            console.log(chalk.cyan('\nℹ Aborted. Fix the issues above and try again.\n'));
-            console.log(chalk.gray('💡 Tips:'));
-            console.log(chalk.gray('  • Run "qwen-loop validate" for detailed validation output'));
-            console.log(chalk.gray('  • Run "qwen-loop init" to create a fresh configuration\n'));
+            console.log(enableColors ? chalk.cyan('\nℹ Aborted. Fix the issues above and try again.\n') : '\nℹ Aborted. Fix the issues above and try again.\n');
+            console.log(enableColors ? chalk.dim('💡 Tips:') : '💡 Tips:');
+            console.log(enableColors ? chalk.dim('  • Run "qwen-loop validate" for detailed validation output') : '  • Run "qwen-loop validate" for detailed validation output');
+            console.log(enableColors ? chalk.dim('  • Run "qwen-loop init" to create a fresh configuration\n') : '  • Run "qwen-loop init" to create a fresh configuration\n');
             process.exit(0);
           }
-          console.log(chalk.yellow('\n⚠ Continuing with warnings...\n'));
+          console.log(enableColors ? chalk.yellow('\n⚠ Continuing with warnings...\n') : '\n⚠ Continuing with warnings...\n');
         } catch (error) {
           // User cancelled (Ctrl+C)
-          console.log(chalk.gray('\n\n⚠ Aborted.\n'));
+          console.log(enableColors ? chalk.dim('\n\n⚠ Aborted.\n') : '\n\n⚠ Aborted.\n');
           process.exit(0);
         }
       }
@@ -608,11 +708,20 @@ program
 
       // Check if multi-project mode
       if (config.projects && config.projects.length > 0) {
-        console.log(`\n${chalk.bold.cyan('🌐 Multi-Project Mode')}\n`);
+        console.log(`\n${chalk.bold.cyan('🌐 Multi-Project Mode')} ${chalk.dim(`(${config.projects.length} projects)`)}\n`);
+        config.projects.forEach((p: ProjectConfig, i: number) => {
+          console.log(`  ${i + 1}. ${chalk.cyan(p.name)} - ${p.workingDirectory}`);
+        });
+        console.log('');
 
         const multiManager = new MultiProjectManager(config);
+        console.log(enableColors ? chalk.dim('  Initializing projects...') : '  Initializing projects...');
         await multiManager.initialize();
+        console.log(enableColors ? chalk.green('  ✓ Projects initialized') : '  ✓ Projects initialized');
+        
+        console.log(enableColors ? chalk.dim('  Starting agents...') : '  Starting agents...');
         await multiManager.start();
+        console.log(enableColors ? chalk.green('  ✓ Agents started') : '  ✓ Agents started');
 
         // Start health server if requested
         let healthServer: import('./core/health-server.js').HealthServer | undefined;
@@ -678,9 +787,12 @@ program
         await new Promise(() => {});
       } else {
         // Single project mode
+        console.log(`\n${chalk.bold.cyan('📦 Single-Project Mode')}\n`);
+        
         const loopManager = new LoopManager(config);
 
         // Create and register agents
+        console.log(enableColors ? chalk.dim(`  Registering ${config.agents.length} agent(s)...`) : `  Registering ${config.agents.length} agent(s)...`);
         for (const agentConfig of config.agents) {
           let agent;
 
@@ -697,12 +809,15 @@ program
           }
 
           loopManager.getOrchestrator().registerAgent(agent);
+          console.log(`  ${enableColors ? chalk.green('✓') : '✓'} ${chalk.cyan(agentConfig.name)} (${agentConfig.type})`);
         }
 
         logger.info(`Registered ${config.agents.length} agents`);
 
         // Start the loop
+        console.log(enableColors ? chalk.dim('\n  Starting loop...') : '\n  Starting loop...');
         await loopManager.start();
+        console.log(enableColors ? chalk.green('  ✓ Loop started') : '  ✓ Loop started');
 
         // Start health server if requested
         let healthServer: import('./core/health-server.js').HealthServer | undefined;
@@ -763,12 +878,13 @@ program
 program
   .command('add-task <description>')
   .description('Add a task to the queue')
+  .alias('add')
   .option('-p, --priority <priority>', 'Task priority: low, medium, high, critical', 'medium')
   .option('-c, --config <path>', 'Path to configuration file')
   .option('--interactive', 'Use interactive mode to configure the task')
   .addHelpText('after', () => {
     const examples = getCommandExamples('add-task');
-    return enableColors 
+    return enableColors
       ? `\n${chalk.bold('📝 Examples:')}\n  ${examples}\n`
       : `\n📝 Examples:\n  ${examples}\n`;
   })
@@ -868,11 +984,12 @@ program
 program
   .command('status')
   .description('Show current status of agents and tasks')
+  .alias('st')
   .option('-c, --config <path>', 'Path to configuration file')
   .option('--json', 'Output in JSON format')
   .addHelpText('after', () => {
     const examples = getCommandExamples('status');
-    return enableColors 
+    return enableColors
       ? `\n${chalk.bold('📝 Examples:')}\n  ${examples}\n`
       : `\n📝 Examples:\n  ${examples}\n`;
   })
@@ -1054,11 +1171,12 @@ program
 program
   .command('config')
   .description('Show current configuration details')
+  .alias('cfg')
   .option('-c, --config <path>', 'Path to configuration file (default: ./qwen-loop.config.json)')
   .option('--json', 'Output in JSON format')
   .addHelpText('after', () => {
     const examples = getCommandExamples('config');
-    return enableColors 
+    return enableColors
       ? `\n${chalk.bold('📝 Examples:')}\n  ${examples}\n`
       : `\n📝 Examples:\n  ${examples}\n`;
   })
@@ -1133,11 +1251,12 @@ program
 program
   .command('validate')
   .description('Validate configuration and check for issues')
+  .alias('val')
   .option('-c, --config <path>', 'Path to configuration file')
   .option('--json', 'Output in JSON format')
   .addHelpText('after', () => {
     const examples = getCommandExamples('validate');
-    return enableColors 
+    return enableColors
       ? `\n${chalk.bold('📝 Examples:')}\n  ${examples}\n`
       : `\n📝 Examples:\n  ${examples}\n`;
   })

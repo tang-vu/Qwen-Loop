@@ -83,7 +83,12 @@ Press `Ctrl+C` to stop.
 | `npm start -- start --health-port 3100` | Start with HTTP health check server |
 | `npm start -- validate` | Validate configuration |
 | `npm start -- config` | Show current configuration |
-| `npm start -- health` | Show system health status |
+| `npm start -- health` | Show full system health status |
+| `npm start -- health agents` | Show agent health and status |
+| `npm start -- health resources` | Show CPU, memory, heap usage |
+| `npm start -- health throughput` | Show task completion rates |
+| `npm start -- health summary` | Show quick status summary |
+| `npm start -- health --watch` | Continuous health monitoring |
 | `npm start -- health --json` | Show health status in JSON format |
 
 ### Single-Project Config
@@ -225,17 +230,28 @@ By Status:
 
 ### Health Check CLI
 
-Get comprehensive system health status:
+Get comprehensive system health status with enhanced subcommands and real-time monitoring:
 
 ```bash
-# Static report (based on config and current system state)
+# Full health report (all metrics)
 npm start -- health
+
+# Specific metrics only
+npm start -- health agents        # Agent health and status
+npm start -- health resources     # CPU, memory, heap usage
+npm start -- health throughput    # Task completion rates and error rates
+npm start -- health summary       # Quick status summary
 
 # Live metrics from running instance
 npm start -- health --live
 
+# Continuous monitoring (watch mode, refreshes every 5s)
+npm start -- health --watch
+npm start -- health --watch --watch-interval 10   # Custom refresh interval
+
 # JSON format (for automation/monitoring tools)
 npm start -- health --json
+npm start -- health agents --json
 
 # Custom host/port
 npm start -- health --live --host localhost --port 8080
@@ -252,11 +268,63 @@ npm start -- health --live --host localhost --port 8080
 
 | Option | Description | Default |
 |--------|-------------|---------|
+| `[subcommand]` | Specific metric: `agents`, `resources`, `throughput`, `summary` | Full report |
 | `--live` | Fetch live metrics from running instance | - |
+| `--watch` | Continuously monitor health status | - |
+| `--watch-interval <seconds>` | Watch mode refresh interval | `5` |
 | `--host <host>` | Health server hostname | `localhost` |
 | `--port <port>` | Health server port | `3100` |
 | `--json` | Output in JSON format | - |
 | `-c, --config <path>` | Path to configuration file | `./qwen-loop.config.json` |
+
+**Example Outputs:**
+
+```bash
+# Agent health output
+npm start -- health agents
+
+🤖 Agent Health (2 agents)
+────────────────────────────────────────────────────────────
+
+✔ Healthy: 1
+● Busy: 1
+✖ Errors: 0
+
+✔ qwen-dev (qwen)
+   Status: idle
+   Tasks: 15 executed | 2 failed
+   Last Task: 45s ago
+
+● custom-agent (custom)
+   Status: busy
+   Tasks: 8 executed | 0 failed
+   Last Task: 120s ago
+
+# Resource usage output
+npm start -- health resources
+
+💻 Resource Usage
+────────────────────────────────────────────────────────────
+
+CPU Usage:          23.5%
+Memory Usage:        4.2 GB (52.3%)
+Heap Usage:          156.8 MB / 512.0 MB (30.6%)
+Active Processes:    1
+System Uptime:       2h 15m
+Process Uptime:      1h 30m
+
+# Watch mode output
+npm start -- health summary --watch
+
+🔄 Watch mode enabled (refreshing every 5s). Press Ctrl+C to stop.
+
+🟢 Overall Status: HEALTHY
+Summary: 2/2 agents healthy | 23 tasks completed | 87.5% success rate | Memory: 52.3%
+Uptime: 1h 30m
+Timestamp: 2026-04-07T01:37:56.789Z
+
+[Refreshes every 5 seconds...]
+```
 
 ### HTTP Health Endpoint (Optional)
 

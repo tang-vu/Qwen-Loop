@@ -3,15 +3,16 @@
     {
       "name": "qwen-developer",
       "type": "qwen",
-      "maxTokens": 8192,
-      "timeout": 300000,
+      "timeout": 120000,
       "workingDirectory": "./project"
     }
   ],
-  "maxConcurrentTasks": 3,
+  "maxConcurrentTasks": 1,
   "loopInterval": 5000,
-  "maxRetries": 3,
+  "maxRetries": 2,
   "workingDirectory": "./project",
   "logLevel": "info",
-  "enableAutoStart": false
+  "enableAutoStart": false,
+  "maxLoopIterations": 5,
+  "enableSelfTaskGeneration": true
 }

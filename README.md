@@ -1,38 +1,29 @@
-# Qwen Loop - Autonomous Qwen Code CLI Loop System
+# Qwen Loop
 
-A powerful framework that orchestrates **Qwen Code CLI** agents in continuous loops for autonomous 24/7 development, automatic updates, infinite fixes, and project evolution.
+Autonomous multi-agent AI coding loop — **Qwen Code** agents that self-direct, self-improve, and continuously develop your projects 24/7.
 
 ## 🚀 Features
 
-- **Qwen Code CLI Only**: Uses Qwen Code CLI directly - no API keys needed
-- **Multi-Agent Orchestration**: Run multiple Qwen agents simultaneously on different tasks
-- **Continuous Loop System**: 24/7 autonomous operation with configurable intervals
-- **Priority Task Queue**: Intelligent task scheduling with priority levels (Critical, High, Medium, Low)
-- **Automatic Retry**: Failed tasks are automatically retried with configurable attempts
-- **Extensible Architecture**: Easy to add custom CLI agents
-- **Real-time Monitoring**: Track agent status, task progress, and system statistics
-- **Flexible Configuration**: JSON-based configuration with validation
-- **CLI Interface**: Easy-to-use command-line interface for control and monitoring
+- **No API Keys** — Uses Qwen Code CLI directly with Qwen OAuth (free)
+- **Self-Directed Tasks** — Automatically analyzes your project and generates relevant tasks
+- **Auto Git Commit & Push** — Every completed task is committed and pushed automatically
+- **Continuous Loop** — Runs indefinitely or up to a configured iteration limit
+- **Multi-Project Support** — Cycle through multiple projects from a single config
+- **Priority Task Queue** — CRITICAL → HIGH → MEDIUM → LOW scheduling
+- **Auto-Approve (YOLO Mode)** — Fully autonomous, never asks for permission
+- **Extensible** — Add any CLI-based AI tool as a custom agent
 
 ## 📦 Installation
 
 ```bash
-# Clone the repository
 git clone <your-repo-url>
 cd Qwen-Loop
-
-# Install dependencies
 npm install
-
-# Initialize configuration
-npm start -- init
 ```
 
 ## 🛠 Quick Start
 
 ### 1. Install Qwen Code CLI
-
-First, make sure Qwen Code CLI is installed and available in your PATH:
 
 ```bash
 # Option 1: npm
@@ -44,330 +35,256 @@ curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/in
 # Option 3: Script (Windows, in admin CMD)
 curl -fsSL -o %TEMP%\install-qwen.bat https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen.bat && %TEMP%\install-qwen.bat
 
-# Verify installation
+# Verify
 qwen --help
 ```
 
-> **Note:** Restart your terminal after installation for environment variables to load.
+> **Note:** Restart your terminal after installation.
 
-### 2. Authentication
+### 2. Authenticate (One-Time)
 
-Qwen Code uses **Qwen OAuth** (free tier). On first run, it will automatically prompt you to log in via browser. No API keys needed.
+```bash
+qwen
+```
+
+First run opens a browser for Qwen OAuth login (free). Close after success.
 
 ### 3. Initialize Configuration
 
+**Single project:**
 ```bash
-npm install
 npm start -- init
 ```
 
-This creates a `qwen-loop.config.json` file with example configuration.
-
-### 4. Configure Your Project
-
-Edit `qwen-loop.config.json`:
-
-```json
-{
-  "agents": [
-    {
-      "name": "qwen-dev",
-      "type": "qwen",
-      "workingDirectory": "./your-project"
-    }
-  ],
-  "maxConcurrentTasks": 3,
-  "loopInterval": 5000,
-  "maxRetries": 3,
-  "workingDirectory": "./your-project",
-  "logLevel": "info"
-}
+**Multi-project:**
+```bash
+npm start -- init-multi
 ```
 
-### 5. Start the Loop
+### 4. Configure & Run
+
+Edit `qwen-loop.config.json`, then:
 
 ```bash
 npm start -- start
 ```
 
-Or in development mode:
-
-```bash
-npm run dev
-```
+Press `Ctrl+C` to stop.
 
 ## 📖 Usage
 
 ### CLI Commands
 
-```bash
-# Generate example configuration
-npm start -- init
+| Command | Description |
+|---------|-------------|
+| `npm start -- init` | Generate single-project config |
+| `npm start -- init-multi` | Generate multi-project config |
+| `npm start -- start` | Start the loop (auto-detects single/multi) |
+| `npm start -- validate` | Validate configuration |
+| `npm start -- config` | Show current configuration |
 
-# Start the agent loop
-npm start -- start
+### Single-Project Config
 
-# Add a task (programmatic)
-npm start -- add-task "Fix all TypeScript errors" --priority high
-
-# Show status
-npm start -- status
-
-# Show configuration
-npm start -- config
-
-# Validate configuration
-npm start -- validate
+```json
+{
+  "agents": [{ "name": "qwen-dev", "type": "qwen", "timeout": 120000 }],
+  "maxConcurrentTasks": 1,
+  "loopInterval": 5000,
+  "maxRetries": 2,
+  "workingDirectory": "./my-project",
+  "maxLoopIterations": 0,
+  "enableSelfTaskGeneration": true
+}
 ```
 
-### Programmatic Usage
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `maxLoopIterations` | `0` (unlimited) | Max tasks before loop stops. `0` = run forever |
+| `enableSelfTaskGeneration` | `true` | Auto-generate tasks by analyzing the project |
 
-```typescript
-import { 
-  LoopManager, 
-  ConfigManager, 
-  TaskPriority,
-  QwenAgent
-} from 'qwen-loop';
+### Multi-Project Config
 
-// Create configuration
-const configManager = new ConfigManager();
-const config = configManager.getConfig();
-
-// Create loop manager
-const loopManager = new LoopManager(config);
-
-// Create and register Qwen agent
-const qwenAgent = new QwenAgent({
-  name: 'qwen-dev',
-  type: 'qwen',
-  workingDirectory: './project'
-});
-
-loopManager.getOrchestrator().registerAgent(qwenAgent);
-
-// Add tasks
-loopManager.addTask(
-  'Implement user authentication system',
-  TaskPriority.HIGH
-);
-
-loopManager.addTask(
-  'Fix all TypeScript compilation errors',
-  TaskPriority.CRITICAL
-);
-
-// Start the loop
-await loopManager.start();
-
-// Monitor progress
-setInterval(() => {
-  console.log(loopManager.getStats());
-}, 10000);
+```json
+{
+  "agents": [{ "name": "qwen", "type": "qwen", "timeout": 120000 }],
+  "maxConcurrentTasks": 1,
+  "loopInterval": 5000,
+  "maxRetries": 2,
+  "maxLoopIterations": 3,
+  "enableSelfTaskGeneration": true,
+  "projects": [
+    { "name": "frontend", "workingDirectory": "./my-app" },
+    { "name": "backend", "workingDirectory": "./my-api" },
+    { "name": "docs", "workingDirectory": "./docs", "maxLoopIterations": 5 }
+  ]
+}
 ```
 
-## ⚙️ Configuration
+Each project gets its own LoopManager instance. After one project finishes its iterations, the loop moves to the next.
 
-### Loop Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `agents` | AgentConfig[] | [] | List of agent configurations |
-| `maxConcurrentTasks` | number | 3 | Maximum number of tasks running simultaneously |
-| `loopInterval` | number | 5000 | Time between loop iterations (milliseconds) |
-| `maxRetries` | number | 3 | Maximum retry attempts for failed tasks |
-| `workingDirectory` | string | process.cwd() | Default working directory for agents |
-| `logLevel` | string | 'info' | Logging level (error, warn, info, debug) |
-| `enableAutoStart` | boolean | false | Auto-start loop on initialization |
-
-### Agent Configuration
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `name` | string | ✓ | Unique agent identifier |
-| `type` | AgentType | ✓ | Agent type (qwen, custom) |
-| `model` | string | | Model name/identifier |
-| `maxTokens` | number | | Maximum tokens for responses |
-| `timeout` | number | | Task execution timeout (ms) |
-| `workingDirectory` | string | | Agent-specific working directory |
-| `additionalArgs` | string[] | | Additional CLI arguments |
-
-## 🏗 Architecture
-
-### Core Components
-
-1. **BaseAgent**: Abstract base class for all agents
-   - QwenAgent: Adapter for Qwen Code CLI
-   - CustomAgent: Extensible adapter for any CLI tool
-
-2. **AgentOrchestrator**: Manages agent registration, task assignment, and coordination
-
-3. **TaskQueue**: Priority-based task queue with scheduling
-
-4. **LoopManager**: Controls the continuous execution loop
-
-5. **ConfigManager**: Handles configuration loading, validation, and persistence
-
-6. **Logger**: Centralized logging system with colored output
-
-### Task Flow
+## 🔄 How the Loop Works
 
 ```
-Task Creation → Task Queue → Orchestrator → Agent Assignment → Task Execution → Result Handling
-                                                                    ↓
-                                                              (Success/Failure)
-                                                                    ↓
-                                                          Retry or Complete
+1. Analyze project → generate self-directed tasks
+2. Pick highest priority task → execute via Qwen Code
+3. Qwen writes code → auto git commit & push
+4. Count iteration → pick next task → repeat
+5. Max iterations reached → stop (or 0 = infinite)
 ```
 
-## 🎯 Task Priorities
-
-- **CRITICAL**: Highest priority, processed first
-- **HIGH**: Important tasks, processed second
-- **MEDIUM**: Normal tasks, processed third
-- **LOW**: Background tasks, processed last
-
-## 📊 Monitoring
-
-The system provides detailed status reports:
-
-### Agent Status Report
+**Flow diagram:**
 ```
-=== Agent Status Report ===
-Total Devices: 2
-Available: 1
-Busy: 1
-Error: 0
-
-🟢 qwen-dev (qwen) - idle
-🔴 claude-reviewer (claude) - busy
+┌─────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Analyze     │────▶│ Generate     │────▶│ Execute via  │
+│  Project     │     │ Tasks        │     │ Qwen Code    │
+└─────────────┘     └──────────────┘     └──────────────┘
+       ▲                                       │
+       │                                       ▼
+       │                              ┌──────────────┐
+       │                              │ Auto Git     │
+       │                              │ Commit+Push  │
+       │                              └──────────────┘
+       │                                       │
+       │                                       ▼
+       │                              ┌──────────────┐
+       │                              │ Next Task    │
+       └──────────────────────────────│ or Stop      │
+                                      └──────────────┘
 ```
 
-### Task Queue Stats
-```
-=== Task Queue Stats ===
-Total Tasks: 10
-Pending in Queue: 3
+## 🤖 Agent Configuration
 
-By Priority:
-  critical: 1
-  high: 1
-  medium: 1
-  LOW: 0
+### Qwen Agent (Default)
 
-By Status:
-  PENDING: 3
-  RUNNING: 1
-  COMPLETED: 5
-  FAILED: 1
+```json
+{
+  "name": "qwen-dev",
+  "type": "qwen",
+  "timeout": 120000,
+  "workingDirectory": "./project"
+}
 ```
 
-## 🔧 Extending
+### Custom Agent
 
-### Adding Custom Agents
+Add any CLI tool:
 
-You can add any CLI-based AI coding tool:
-
-```typescript
-import { CustomAgent } from 'qwen-loop';
-
-const customAgent = new CustomAgent({
-  name: 'my-ai-tool',  // CLI command name
-  type: 'custom',
-  workingDirectory: './project',
-  additionalArgs: ['--custom-flag']
-});
+```json
+{
+  "name": "aider",
+  "type": "custom",
+  "workingDirectory": "./project",
+  "additionalArgs": ["--auto-commits", "--yes-always"]
+}
 ```
 
-### Creating Custom Agent Classes
+## 📁 Auto-Created Settings
 
-```typescript
-import { BaseAgent } from 'qwen-loop';
+Qwen Loop creates `.qwen/settings.json` in your working directory with:
 
-export class MyCustomAgent extends BaseAgent {
-  protected async onInitialize(): Promise<void> {
-    // Initialization logic
-  }
-
-  protected async onExecuteTask(task: Task, signal: AbortSignal): Promise<AgentResult> {
-    // Task execution logic
-    return {
-      success: true,
-      output: 'Task completed',
-      executionTime: 1000
-    };
+```json
+{
+  "permissions": {
+    "defaultMode": "yolo",
+    "confirmShellCommands": false,
+    "confirmFileEdits": false
   }
 }
 ```
 
-## 📝 Logging
+This ensures Qwen Code **never asks for permission** — fully autonomous.
 
-Logs are stored in `logs/qwen-loop.log` with rotation (5MB max, 5 files).
+## 📊 Monitoring
 
-View logs in real-time:
-```bash
-tail -f logs/qwen-loop.log
+Status prints every 30 seconds during loop execution:
+
 ```
+=== Agent Status Report ===
+Total Agents: 1
+Available: 1
+Busy: 0
+Error: 0
 
-## 🛡 Best Practices
+🟢 qwen-dev (qwen) - idle
 
-1. **Set Appropriate Timeouts**: Prevent agents from running indefinitely
-2. **Use Priority Levels**: Critical fixes should be high priority, features can be medium/low
-3. **Monitor Resource Usage**: Keep an eye on API rate limits
-4. **Configure Retries**: Balance between resilience and avoiding infinite loops
-5. **Working Directory**: Use project-specific directories to avoid conflicts
-6. **Log Level**: Use 'debug' for troubleshooting, 'info' for normal operation
+=== Task Queue Stats ===
+Total Tasks: 5
+Pending in Queue: 3
+
+By Status:
+  PENDING: 3
+  RUNNING: 0
+  COMPLETED: 2
+  FAILED: 0
+```
 
 ## 🔍 Troubleshooting
 
-### Agent Not Starting
-- Verify Qwen Code CLI is installed: `qwen --help`
-- Restart terminal if recently installed (env vars need reload)
-- Ensure you're authenticated: run `qwen` once to complete OAuth
-- Review logs: `logs/qwen-loop.log`
-
-### Tasks Failing
-- Increase timeout in agent configuration
-- Check task description is valid
-- Review error messages in logs
-- Increase maxRetries for transient failures
-
-### High Memory Usage
-- Reduce maxConcurrentTasks
-- Increase loopInterval
-- Monitor agent process count
+| Issue | Fix |
+|-------|-----|
+| `qwen: command not found` | Install Qwen Code CLI, restart terminal |
+| `Authentication required` | Run `qwen` once to complete OAuth login |
+| Task fails with spawn error | Check workingDirectory exists, increase timeout |
+| Git push fails | Ensure repo is initialized, run `git push` manually first |
 
 ## 📋 Requirements
 
 - Node.js 18+
-- npm or yarn
-- Qwen Code CLI (see installation steps above)
-- Qwen OAuth authentication (free, one-time browser login)
+- Qwen Code CLI (installed globally)
+- Git (for auto commit/push)
+- Qwen OAuth (free, one-time browser login)
 
-## 🤝 Contributing
+## 🏗 Architecture
 
-Contributions are welcome! Please feel free to submit issues and pull requests.
-
-## 📄 License
-
-ISC
+| Component | Description |
+|-----------|-------------|
+| `QwenAgent` | Adapter for Qwen Code CLI with `--yolo` auto-approve |
+| `CustomAgent` | Extensible adapter for any CLI tool |
+| `AgentOrchestrator` | Manages agent registration and task assignment |
+| `TaskQueue` | Priority-based queue (CRITICAL → LOW) |
+| `LoopManager` | Controls execution loop with retry and iteration limits |
+| `SelfTaskGenerator` | Analyzes project code and generates improvement tasks |
+| `MultiProjectManager` | Cycles through multiple projects sequentially |
+| `GitUtils` | Auto `git add` → `commit` → `push` after each task |
+| `ConfigManager` | JSON config with validation |
+| `Logger` | Winston logging with file rotation |
 
 ## 🌟 Example Use Cases
 
-1. **Automated Code Review**: Agents continuously review and improve code quality
-2. **Bug Fixing Pipeline**: Automatically detect and fix common issues
-3. **Feature Development**: Agents work on implementing new features
-4. **Documentation Updates**: Keep documentation in sync with code
-5. **Test Generation**: Automatically generate and maintain test suites
-6. **Refactoring**: Continuous code improvement and modernization
-7. **Dependency Updates**: Automated dependency management and updates
+1. **Automated Code Review** — Agents review and improve code quality
+2. **Bug Fixing Pipeline** — Auto-detect and fix common issues
+3. **Feature Development** — Implement new features autonomously
+4. **Documentation Updates** — Keep docs in sync with code
+5. **Test Generation** — Generate and maintain test suites
+6. **Refactoring** — Continuous code improvement
+7. **Multi-Project Maintenance** — Cycle through all your repos
 
-## 📞 Support
+## 📝 Logging
 
-For issues and questions:
-- Check the logs: `logs/qwen-loop.log`
-- Validate configuration: `npm start -- validate`
-- Review this README
+Logs are in `logs/qwen-loop.log` (5MB max, 5 files rotation).
+
+```bash
+# Real-time
+tail -f logs/qwen-loop.log     # Unix
+Get-Content logs/qwen-loop.log -Wait  # Windows
+```
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## ⚠️ Security
+
+Qwen Loop runs AI agents in **YOLO mode** — they can read, modify, create, and delete files without confirmation. Always:
+- Use version control (commits are automatic)
+- Start with a small `maxLoopIterations` to test
+- Use a dedicated working directory, not your entire project root
+
+See [SECURITY.md](SECURITY.md) for details.
+
+## 📄 License
+
+MIT
 
 ---
 

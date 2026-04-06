@@ -5,13 +5,13 @@
 ### 1. Install Qwen Code CLI
 
 ```bash
-# Option 1: npm
+# npm
 npm install -g @qwen-code/qwen-code
 
-# Option 2: Script (Linux/macOS)
+# Or Linux/macOS script
 curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen.sh | bash
 
-# Option 3: Script (Windows, in admin CMD)
+# Or Windows script (admin CMD)
 curl -fsSL -o %TEMP%\install-qwen.bat https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen.bat && %TEMP%\install-qwen.bat
 
 # Verify
@@ -26,149 +26,126 @@ qwen --help
 qwen
 ```
 
-First run will open a browser for Qwen OAuth login (free). Close after successful login.
+Opens browser for OAuth login (free). Close after success.
 
 ### 2. Install Dependencies
+
 ```bash
 npm install
 ```
 
 ### 3. Initialize Configuration
+
+**Single project:**
 ```bash
 npm start -- init
 ```
 
-This creates `qwen-loop.config.json` with example setup.
+**Multi-project:**
+```bash
+npm start -- init-multi
+```
 
-### 4. Configure Your Project Directory
+### 4. Configure Your Project
 
 Edit `qwen-loop.config.json`:
+
 ```json
 {
-  "workingDirectory": "./your-project-path",
-  "agents": [
-    {
-      "name": "qwen-dev",
-      "type": "qwen",
-      "workingDirectory": "./your-project-path"
-    }
-  ]
+  "agents": [{ "name": "qwen-dev", "type": "qwen", "timeout": 120000 }],
+  "maxConcurrentTasks": 1,
+  "loopInterval": 5000,
+  "maxRetries": 2,
+  "workingDirectory": "./your-project",
+  "maxLoopIterations": 0,
+  "enableSelfTaskGeneration": true
 }
 ```
 
-### 5. Start the Loop!
+| Setting | Description |
+|---------|-------------|
+| `maxLoopIterations` | `0` = run forever, `N` = stop after N tasks |
+| `enableSelfTaskGeneration` | Auto-analyze project and generate tasks |
+
+### 5. Run!
+
 ```bash
 npm start -- start
 ```
+
+Press `Ctrl+C` to stop.
 
 ## 📋 Common Commands
 
 ```bash
-# Initialize config
-npm start -- init
-
-# Start the loop
-npm start -- start
-
-# Validate configuration
-npm start -- validate
-
-# Show config details
-npm start -- config
-
-# Development mode (with auto-reload)
-npm run dev
+npm start -- init           # Single-project config
+npm start -- init-multi     # Multi-project config
+npm start -- start          # Start the loop
+npm start -- validate       # Check config
+npm start -- config         # Show config details
+npm run dev                 # Dev mode with auto-reload
 ```
 
-## 🎯 Example Tasks
+## 🌐 Multi-Project Example
 
-Once the loop is running, tasks are automatically processed from the queue. You can programmatically add tasks:
+```json
+{
+  "agents": [{ "name": "qwen", "type": "qwen", "timeout": 120000 }],
+  "maxLoopIterations": 3,
+  "enableSelfTaskGeneration": true,
+  "projects": [
+    { "name": "frontend", "workingDirectory": "./my-app" },
+    { "name": "backend", "workingDirectory": "./my-api" }
+  ]
+}
+```
 
-```typescript
-import { LoopManager, TaskPriority } from './src/index.js';
-
-// In your code
-loopManager.addTask(
-  'Fix all TypeScript compilation errors',
-  TaskPriority.CRITICAL
-);
-
-loopManager.addTask(
-  'Implement user authentication',
-  TaskPriority.HIGH
-);
-
-loopManager.addTask(
-  'Add unit tests for API',
-  TaskPriority.MEDIUM
-);
+```bash
+npm start -- start
+# → Works on frontend (3 tasks) → then backend (3 tasks) → cycles
 ```
 
 ## ⚙️ Configuration Tips
 
-1. **Adjust Loop Interval**: Lower = faster processing (more resource usage)
-   ```json
-   "loopInterval": 3000  // 3 seconds
-   ```
-
-2. **Control Concurrency**: Limit simultaneous tasks
-   ```json
-   "maxConcurrentTasks": 2
-   ```
-
-3. **Set Retry Attempts**: Handle transient failures
-   ```json
-   "maxRetries": 5
-   ```
-
-4. **Multiple Agents**: Run multiple Qwen agents
-   ```json
-   "agents": [
-     {"name": "qwen-coder", "type": "qwen"},
-     {"name": "qwen-reviewer", "type": "qwen"}
-   ]
-   ```
+1. **Loop speed**: Lower `loopInterval` = faster, more resource usage
+2. **Safety first**: Set `maxLoopIterations` > 0 for testing, `0` for production
+3. **Parallel tasks**: Increase `maxConcurrentTasks` (Qwen handles one at a time)
+4. **Multiple agents**: Run different Qwen agents with different models
 
 ## 📊 Monitoring
 
-View real-time logs:
-```bash
-# On Unix/Linux/Mac
-tail -f logs/qwen-loop.log
+Status prints every 30 seconds:
 
-# On Windows
-Get-Content logs/qwen-loop.log -Wait
+```
+🟢 qwen-dev (qwen) - idle
+=== Task Queue Stats ===
+  COMPLETED: 3 | FAILED: 0 | RUNNING: 0
 ```
 
-## 🛑 Stopping the Loop
+View live logs:
+```bash
+tail -f logs/qwen-loop.log
+```
 
-Press `Ctrl+C` to gracefully shut down the system.
+## 🛑 Stopping
+
+`Ctrl+C` → graceful shutdown, stops after current task finishes.
 
 ## 🔧 Troubleshooting
 
-**Issue**: "No agents configured"
-- Run `npm start -- init` to create config
-- Edit `qwen-loop.config.json` and add agents
-
-**Issue**: "Qwen Code CLI not found"
-- Install Qwen Code CLI: `npm install -g @qwen-code/qwen-code`
-- Or use install script (see step 1)
-- Restart terminal, then verify: `qwen --help`
-
-**Issue**: "Authentication required"
-- Run `qwen` once to complete OAuth login in browser
-- Or run `qwen auth login`
-
-**Issue**: Agents not executing tasks
-- Check Qwen Code CLI is installed
-- Verify working directory exists
-- Check logs: `logs/qwen-loop.log`
+| Issue | Fix |
+|-------|-----|
+| `qwen: command not found` | `npm install -g @qwen-code/qwen-code`, restart terminal |
+| `Authentication required` | Run `qwen` once to login |
+| No agents configured | Run `npm start -- init` |
+| Qwen asks for permission | Check `.qwen/settings.json` has `"defaultMode": "yolo"` |
+| Git push fails | Run `git push` manually once to setup remote |
 
 ## 📚 Next Steps
 
-- Read the full [README.md](README.md) for detailed documentation
-- Explore [examples](qwen-loop.config.example.json) for configuration patterns
-- Check the source code in `src/` to understand the architecture
+- Read full [README.md](README.md) for architecture details
+- Check [SECURITY.md](SECURITY.md) for risks of autonomous agents
+- See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute
 
 ---
 

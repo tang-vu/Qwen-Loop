@@ -133,10 +133,11 @@ program
   .addHelpText('afterAll', () => {
     const dim = (text: string) => enableColors ? chalk.dim(text) : text;
     const cyan = (text: string) => enableColors ? chalk.cyan(text) : text;
-    
+    const bold = (text: string) => enableColors ? chalk.bold(text) : text;
+
     return enableColors
-      ? `\n${chalk.bold('Environment Variables:')}\n  ${chalk.cyan('QWEN_LOOP_CONFIG')}    Custom config file path\n  ${chalk.cyan('QWEN_LOOP_LOG_LEVEL')}  Log level (debug|info|warn|error)\n  ${chalk.cyan('NO_COLOR')}              Disable colored output\n`
-      : `\nEnvironment Variables:\n  QWEN_LOOP_CONFIG    Custom config file path\n  QWEN_LOOP_LOG_LEVEL  Log level (debug|info|warn|error)\n  NO_COLOR              Disable colored output\n`;
+      ? `\n${chalk.bold('Global Options:')}\n  ${chalk.cyan('--no-color')}              Disable colored output (useful for scripts)\n  ${chalk.cyan('-V, --version')}            Show Qwen Loop version number\n\n${chalk.bold('Environment Variables:')}\n  ${chalk.cyan('QWEN_LOOP_CONFIG')}    Custom config file path\n  ${chalk.cyan('QWEN_LOOP_LOG_LEVEL')}  Log level (debug|info|warn|error)\n  ${chalk.cyan('NO_COLOR')}              Disable colored output\n`
+      : `\nGlobal Options:\n  --no-color              Disable colored output (useful for scripts)\n  -V, --version            Show Qwen Loop version number\n\nEnvironment Variables:\n  QWEN_LOOP_CONFIG    Custom config file path\n  QWEN_LOOP_LOG_LEVEL  Log level (debug|info|warn|error)\n  NO_COLOR              Disable colored output\n`;
   })
   .configureHelp({
     styleTitle: (str) => enableColors ? chalk.bold.underline(str) : str,
@@ -608,7 +609,14 @@ program
           message: enableColors ? chalk.white('Working directory (press Enter for current dir):') : 'Working directory (press Enter for current dir):',
           default: './project',
           validate: (value) => {
-            if (value.trim() === '') return true;
+            const trimmed = value.trim();
+            if (trimmed === '') return true; // Allow empty (will use default)
+            
+            // Check for invalid characters
+            if (/[<>:"|?*]/.test(trimmed)) {
+              return 'Directory path contains invalid characters. Avoid: < > : " | ? *';
+            }
+            
             return true;
           }
         });
@@ -635,8 +643,13 @@ program
           message: enableColors ? chalk.white('Agent name:') : 'Agent name:',
           default: agentType === AgentType.QWEN ? 'qwen-dev' : 'custom-agent',
           validate: (value) => {
-            if (!value.trim()) return 'Agent name cannot be empty';
-            if (value.trim().length < 3) return 'Agent name must be at least 3 characters';
+            const trimmed = value.trim();
+            if (!trimmed) return 'Agent name cannot be empty';
+            if (trimmed.length < 3) return 'Agent name must be at least 3 characters';
+            if (trimmed.length > 50) return 'Agent name must be less than 50 characters';
+            if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+              return 'Agent name can only contain letters, numbers, hyphens, and underscores';
+            }
             return true;
           }
         });
@@ -749,20 +762,22 @@ program
           'PERMISSION_DENIED',
           [`Check that you have write permissions for the current directory`, `Run with elevated privileges if needed`]
         );
+        process.exit(ExitCode.PERMISSION_DENIED);
       } else if (message.includes('ENOSPC')) {
         displayErrorCode(
           'No space left on device',
           'DISK_FULL',
           ['Free up disk space and try again']
         );
+        process.exit(ExitCode.GENERAL_ERROR);
       } else {
-        displayError(
+        displayErrorCode(
           `Failed to create configuration file: ${message}`,
-          'Check that you have write permissions in the current directory',
-          ExitCode.GENERAL_ERROR
+          'FILE_WRITE_ERROR',
+          ['Check that you have write permissions in the current directory']
         );
+        process.exit(ExitCode.GENERAL_ERROR);
       }
-      process.exit(ExitCode.GENERAL_ERROR);
     }
   });
 
@@ -865,12 +880,31 @@ program
           const projectName = await input({
             message: enableColors ? chalk.white('Project name:') : 'Project name:',
             default: `project-${projects.length + 1}`,
-            validate: (value) => value.trim() ? true : 'Project name cannot be empty'
+            validate: (value) => {
+              const trimmed = value.trim();
+              if (!trimmed) return 'Project name cannot be empty';
+              if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+                return 'Project name can only contain letters, numbers, hyphens, and underscores';
+              }
+              // Check for duplicates
+              if (projects.some(p => p.name === trimmed)) {
+                return `Project name "${trimmed}" already exists. Use a unique name.`;
+              }
+              return true;
+            }
           });
 
           const projectDir = await input({
             message: enableColors ? chalk.white('Working directory:') : 'Working directory:',
             default: `./${projectName}`,
+            validate: (value) => {
+              const trimmed = value.trim();
+              if (!trimmed) return 'Working directory cannot be empty';
+              if (/[<>:"|?*]/.test(trimmed)) {
+                return 'Directory path contains invalid characters. Avoid: < > : " | ? *';
+              }
+              return true;
+            }
           });
 
           const maxIterationsStr = await input({
@@ -961,12 +995,30 @@ program
         process.exit(ExitCode.USER_CANCELLED);
       }
       const message = error instanceof Error ? error.message : String(error);
-      displayError(
-        `Failed to create configuration file: ${message}`,
-        'Check that you have write permissions in the current directory',
-        ExitCode.GENERAL_ERROR
-      );
-      process.exit(ExitCode.GENERAL_ERROR);
+      
+      // Provide specific error messages
+      if (message.includes('EPERM') || message.includes('EACCES')) {
+        displayErrorCode(
+          'Permission denied when writing configuration file',
+          'PERMISSION_DENIED',
+          [`Check that you have write permissions for the current directory`, `Run with elevated privileges if needed`]
+        );
+        process.exit(ExitCode.PERMISSION_DENIED);
+      } else if (message.includes('ENOSPC')) {
+        displayErrorCode(
+          'No space left on device',
+          'DISK_FULL',
+          ['Free up disk space and try again']
+        );
+        process.exit(ExitCode.GENERAL_ERROR);
+      } else {
+        displayErrorCode(
+          `Failed to create configuration file: ${message}`,
+          'FILE_WRITE_ERROR',
+          ['Check that you have write permissions in the current directory']
+        );
+        process.exit(ExitCode.GENERAL_ERROR);
+      }
     }
   });
 
@@ -1017,10 +1069,16 @@ program
           ? chalk.dim('Configure and start the agent loop\n')
           : 'Configure and start the agent loop\n');
 
+        // Try to auto-detect config files
+        const detectedConfig = autoDetectConfigFile();
+        const defaultConfigHint = detectedConfig 
+          ? `press Enter for ${detectedConfig}`
+          : 'press Enter for auto-detect';
+
         // Ask for config file path
         const configPathInput = await input({
-          message: enableColors ? chalk.white('Configuration file path (press Enter for auto-detect):') : 'Configuration file path (press Enter for auto-detect):',
-          default: '',
+          message: enableColors ? chalk.white(`Configuration file path (${defaultConfigHint}):`) : `Configuration file path (${defaultConfigHint}):`,
+          default: detectedConfig || '',
         });
 
         // Ask if they want to enable health check
@@ -1051,16 +1109,32 @@ program
       const configManager = new ConfigManager(configPath);
 
       // Check if config file was loaded or using defaults
-      if (!existsSync(configManager['configPath'])) {
-        displayErrorCode(
-          `Configuration file not found: ${configManager['configPath']}`,
-          'CONFIG_NOT_FOUND',
-          [
-            `Run ${chalk.yellow('qwen-loop init')} to create a configuration file`,
-            `Use ${chalk.yellow('qwen-loop init --interactive')} for guided setup`,
-            `Or specify a config file: ${chalk.yellow('qwen-loop start --config my-config.json')}`,
-          ]
-        );
+      const actualConfigPath = configManager['configPath'];
+      if (!actualConfigPath || !existsSync(actualConfigPath)) {
+        // Try auto-detection to provide a better error message
+        const detectedPath = autoDetectConfigFile(configPath);
+        
+        if (detectedPath) {
+          displayErrorCode(
+            'No active configuration file found',
+            'CONFIG_NOT_FOUND',
+            [
+              `Auto-detected config file at: ${chalk.cyan(detectedPath)}`,
+              `Use detected config: ${chalk.yellow(`qwen-loop start --config ${detectedPath}`)}`,
+              `Create a new one: ${chalk.yellow('qwen-loop init')}`,
+            ]
+          );
+        } else {
+          displayErrorCode(
+            'No configuration file found',
+            'CONFIG_NOT_FOUND',
+            [
+              `Run ${chalk.yellow('qwen-loop init')} to create a configuration file`,
+              `Use ${chalk.yellow('qwen-loop init --interactive')} for guided setup`,
+              `Or specify a config file: ${chalk.yellow('qwen-loop start --config my-config.json')}`,
+            ]
+          );
+        }
         process.exit(ExitCode.CONFIG_NOT_FOUND);
       }
 
@@ -1103,17 +1177,21 @@ program
       // Handle graceful shutdown
       const setupShutdown = async (stopFn: () => Promise<void>) => {
         process.on('SIGINT', async () => {
-          console.log(chalk.yellow('\n\n⏹ Shutting down gracefully...'));
+          const yellow = enableColors ? chalk.yellow : (s: string) => s;
+          const green = enableColors ? chalk.green : (s: string) => s;
+          console.log(yellow('\n\n⏹ Shutting down gracefully...'));
           await stopFn();
-          console.log(chalk.green('✓ Shutdown complete.\n'));
-          process.exit(0);
+          console.log(green('✓ Shutdown complete.\n'));
+          process.exit(ExitCode.SUCCESS);
         });
 
         process.on('SIGTERM', async () => {
-          console.log(chalk.yellow('\n\n⏹ Shutting down gracefully...'));
+          const yellow = enableColors ? chalk.yellow : (s: string) => s;
+          const green = enableColors ? chalk.green : (s: string) => s;
+          console.log(yellow('\n\n⏹ Shutting down gracefully...'));
           await stopFn();
-          console.log(chalk.green('✓ Shutdown complete.\n'));
-          process.exit(0);
+          console.log(green('✓ Shutdown complete.\n'));
+          process.exit(ExitCode.SUCCESS);
         });
       };
 
@@ -1430,7 +1508,16 @@ program
 
       priority = priorityMap[priorityKey];
 
-      const configManager = new ConfigManager(opts.config);
+      // Auto-detect config if not specified
+      let configPath = opts.config;
+      if (!configPath) {
+        const detectedPath = autoDetectConfigFile();
+        if (detectedPath) {
+          configPath = detectedPath;
+        }
+      }
+
+      const configManager = new ConfigManager(configPath);
       requireConfig(configManager);
 
       const config = configManager.getConfig();
@@ -1444,7 +1531,7 @@ program
             `Or edit your config file to add at least one agent`,
           ]
         );
-        process.exit(1);
+        process.exit(ExitCode.CONFIG_INVALID);
       }
 
       // Create a temporary loop manager to add the task
@@ -1475,10 +1562,10 @@ program
       console.log(enableColors ? chalk.gray('─'.repeat(60)) : '─'.repeat(60));
       console.log(`  ${enableColors ? chalk.bold('Description:') : 'Description:'} ${description}`);
       console.log(`  ${enableColors ? chalk.bold('Priority:') : 'Priority:'}    ${
-        enableColors 
-          ? (priority === TaskPriority.CRITICAL ? chalk.red.bold(priority) 
-            : priority === TaskPriority.HIGH ? chalk.yellow(priority) 
-            : priority === TaskPriority.MEDIUM ? chalk.green(priority) 
+        enableColors
+          ? (priority === TaskPriority.CRITICAL ? chalk.red.bold(priority)
+            : priority === TaskPriority.HIGH ? chalk.yellow(priority)
+            : priority === TaskPriority.MEDIUM ? chalk.green(priority)
             : chalk.blue(priority))
           : priority
       }`);
@@ -1486,16 +1573,23 @@ program
       console.log(`  ${enableColors ? chalk.bold('Created:') : 'Created:'}     ${task.createdAt.toISOString()}`);
       console.log(`  ${enableColors ? chalk.bold('Status:') : 'Status:'}      ${enableColors ? chalk.yellow('PENDING') : 'PENDING'}`);
       console.log(enableColors ? chalk.gray('─'.repeat(60)) : '─'.repeat(60));
+
+      // Show queue context
+      const queueStatsOutput = loopManager.getTaskQueueStats();
+      console.log(enableColors ? chalk.dim(`\n📊 Task Queue:`) : `\n📊 Task Queue:`);
+      console.log(queueStatsOutput);
       
-      const queueSize = loopManager.getTaskQueue().size();
-      console.log(enableColors ? chalk.dim(`\n📊 Queue: ${queueSize} pending task(s)`) : `\n📊 Queue: ${queueSize} pending task(s)`);
-      console.log(enableColors ? chalk.gray('\n💡 Start processing with: qwen-loop start\n') : '\n💡 Start processing with: qwen-loop start\n');
+      if (config.enableAutoStart) {
+        console.log(enableColors ? chalk.green('\n✅ Auto-start enabled - task will be processed automatically') : '\n✅ Auto-start enabled - task will be processed automatically');
+      } else {
+        console.log(enableColors ? chalk.gray('\n💡 Start processing with: qwen-loop start\n') : '\n💡 Start processing with: qwen-loop start\n');
+      }
     } catch (error) {
       if (error instanceof Error && error.message === 'User force closed the prompt') {
         console.log(enableColors
           ? chalk.dim('\n\n⚠ Task creation cancelled by user.\n')
           : '\n\n⚠ Task creation cancelled by user.\n');
-        process.exit(0);
+        process.exit(ExitCode.USER_CANCELLED);
       }
 
       const message = error instanceof Error ? error.message : String(error);
@@ -1507,7 +1601,7 @@ program
           'Run "qwen-loop validate" to check configuration',
         ]
       );
-      process.exit(1);
+      process.exit(ExitCode.CONFIG_INVALID);
     }
   });
 
@@ -1532,18 +1626,45 @@ program
     healthPort?: string;
   }) => {
     try {
-      const configManager = new ConfigManager(opts.config);
+      let configPath = opts.config;
+      
+      // Auto-detect config if not specified
+      if (!configPath) {
+        const detectedPath = autoDetectConfigFile();
+        if (detectedPath) {
+          configPath = detectedPath;
+        }
+      }
+
+      const configManager = new ConfigManager(configPath);
 
       // Check if config exists
-      if (!existsSync(configManager['configPath'])) {
-        displayError(
-          'No configuration file found',
-          [
-            'Run "qwen-loop init" to create a configuration file',
-            'Or specify a config file: qwen-loop status --config my-config.json',
-          ]
-        );
-        process.exit(1);
+      const actualConfigPath = configManager['configPath'];
+      if (!actualConfigPath || !existsSync(actualConfigPath)) {
+        // Try auto-detection to provide a better error message
+        const detectedPath = autoDetectConfigFile();
+        
+        if (detectedPath) {
+          displayErrorCode(
+            'No active configuration file found',
+            'CONFIG_NOT_FOUND',
+            [
+              `Auto-detected config file at: ${chalk.cyan(detectedPath)}`,
+              `Use detected config: ${chalk.yellow(`qwen-loop status --config ${detectedPath}`)}`,
+              `Create a new one: ${chalk.yellow('qwen-loop init')}`,
+            ]
+          );
+        } else {
+          displayErrorCode(
+            'No configuration file found',
+            'CONFIG_NOT_FOUND',
+            [
+              'Run "qwen-loop init" to create a configuration file',
+              'Or specify a config file: qwen-loop status --config my-config.json',
+            ]
+          );
+        }
+        process.exit(ExitCode.CONFIG_NOT_FOUND);
       }
 
       const config = configManager.getConfig();
@@ -1691,7 +1812,7 @@ program
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       displayError(`Failed to show status: ${message}`);
-      process.exit(1);
+      process.exit(ExitCode.GENERAL_ERROR);
     }
   });
 
@@ -1715,19 +1836,42 @@ program
   })
   .action(async (opts: { config?: string; json?: boolean }) => {
     try {
-      const configManager = new ConfigManager(opts.config);
-      const configPath = configManager['configPath'];
+      // Auto-detect config if not specified
+      let configPath = opts.config;
+      if (!configPath) {
+        const detectedPath = autoDetectConfigFile();
+        if (detectedPath) {
+          configPath = detectedPath;
+        }
+      }
 
-      if (!existsSync(configPath)) {
-        displayError(
-          `Configuration file not found at "${configPath}"`,
-          [
-            `Run 'qwen-loop init' to create a configuration file`,
-            `Use 'qwen-loop init --interactive' for guided setup`,
-            `Or specify a custom path: qwen-loop config --config <path>`,
-          ]
-        );
-        process.exit(1);
+      const configManager = new ConfigManager(configPath);
+      const actualConfigPath = configManager['configPath'];
+
+      if (!actualConfigPath || !existsSync(actualConfigPath)) {
+        const detectedPath = autoDetectConfigFile();
+        
+        if (detectedPath) {
+          displayErrorCode(
+            'No active configuration file found',
+            'CONFIG_NOT_FOUND',
+            [
+              `Auto-detected config file at: ${chalk.cyan(detectedPath)}`,
+              `Use detected config: ${chalk.yellow(`qwen-loop config --config ${detectedPath}`)}`,
+              `Create a new one: ${chalk.yellow('qwen-loop init')}`,
+            ]
+          );
+        } else {
+          displayError(
+            `Configuration file not found`,
+            [
+              `Run 'qwen-loop init' to create a configuration file`,
+              `Use 'qwen-loop init --interactive' for guided setup`,
+              `Or specify a custom path: qwen-loop config --config <path>`,
+            ]
+          );
+        }
+        process.exit(ExitCode.CONFIG_NOT_FOUND);
       }
 
       const config = configManager.getConfig();
@@ -1778,7 +1922,7 @@ program
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       displayError(`Failed to load configuration: ${message}`);
-      process.exit(1);
+      process.exit(ExitCode.GENERAL_ERROR);
     }
   });
 
@@ -1819,7 +1963,7 @@ program
             ]
           );
         }
-        process.exit(1);
+        process.exit(ExitCode.CONFIG_NOT_FOUND);
       }
 
       const config = configManager.getConfig();
@@ -1884,7 +2028,7 @@ program
       } else {
         displayError(`Failed to validate configuration: ${message}`);
       }
-      process.exit(1);
+      process.exit(ExitCode.VALIDATION_FAILED);
     }
   });
 
@@ -1892,15 +2036,6 @@ program
 export { LoopManager, MultiProjectManager, ConfigManager, QwenAgent, CustomAgent };
 
 // Add command-not-found handler with suggestions
-program.configureHelp({
-  styleTitle: (str) => enableColors ? chalk.bold.underline(str) : str,
-  styleCommandText: (str) => enableColors ? chalk.yellow(str) : str,
-  styleCommandDescription: (str) => enableColors ? chalk.green(str) : str,
-  styleOptionText: (str) => enableColors ? chalk.cyan(str) : str,
-  styleDescriptionText: (str) => enableColors ? chalk.white(str) : str,
-  styleArgumentText: (str) => enableColors ? chalk.yellow(str) : str,
-  showGlobalOptions: true,
-});
 
 // Override the error handler for unknown commands
 program.on('command:*', () => {

@@ -455,8 +455,22 @@ export class HealthChecker {
       cpuUsage = this.estimateCpuUsage();
     }
 
-    // Count active child processes
-    const activeProcesses = this.agents.filter(a => a.getStatus() === AgentStatus.BUSY).length;
+    // Count active child processes with error handling
+    let activeProcesses = 0;
+    try {
+      activeProcesses = this.agents.filter(a => {
+        try {
+          return a.getStatus() === AgentStatus.BUSY;
+        } catch {
+          return false;
+        }
+      }).length;
+    } catch {
+      logger.debug('Failed to count active agent processes', {
+        operation: 'health.resource'
+      });
+      activeProcesses = 0;
+    }
 
     return {
       cpuUsage,
@@ -663,5 +677,47 @@ export class HealthChecker {
     if (hours > 0) return `${hours}h ${minutes % 60}m`;
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
     return `${seconds}s`;
+  }
+
+  /**
+   * Start CPU usage monitoring with periodic sampling.
+   *
+   * Sets up an interval timer to periodically measure CPU usage
+   * for more accurate reporting. Cleans up previous interval if running.
+   *
+   * @param intervalMs - Sampling interval in milliseconds (default: 5000)
+   */
+  startCpuMonitoring(intervalMs = 5000): void {
+    // Stop existing monitoring if running
+    this.stopCpuMonitoring();
+
+    this.cpuCheckInterval = setInterval(() => {
+      this.estimateCpuUsage();
+    }, intervalMs);
+  }
+
+  /**
+   * Stop CPU usage monitoring and clean up the interval timer.
+   */
+  stopCpuMonitoring(): void {
+    if (this.cpuCheckInterval) {
+      clearInterval(this.cpuCheckInterval);
+      this.cpuCheckInterval = null;
+    }
+  }
+
+  /**
+   * Clean up all resources and stop monitoring.
+   *
+   * Stops CPU monitoring and clears internal caches to prevent memory leaks.
+   * Should be called when the HealthChecker is no longer needed.
+   */
+  dispose(): void {
+    this.stopCpuMonitoring();
+    this.agents = [];
+    this.taskQueue.clear();
+    this.agentTaskCounts.clear();
+    this.agentLastTaskTime.clear();
+    this.loopStartTime = null;
   }
 }

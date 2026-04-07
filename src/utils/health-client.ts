@@ -14,7 +14,7 @@ export interface HealthClientOptions {
 }
 
 /**
- * Fetch a comprehensive health report from a running Qwen Loop instance via HTTP
+ * Fetch a comprehensive health report from a running Qwen Loop instance via HTTP.
  *
  * Connects to the health server endpoint and retrieves detailed system metrics
  * including agent health, task throughput, resource usage, and configuration.
@@ -33,9 +33,20 @@ export interface HealthClientOptions {
  * ```
  */
 export async function fetchHealthReport(options: HealthClientOptions = {}): Promise<HealthReport> {
-  const host = options.host || 'localhost';
-  const port = options.port || 3100;
-  const timeout = options.timeout || 5000;
+  const host = options.host ?? 'localhost';
+  const port = options.port ?? 3100;
+  const timeout = options.timeout ?? 5000;
+
+  // Validate parameters
+  if (typeof host !== 'string' || host.trim().length === 0) {
+    throw new Error('Health client: host must be a valid non-empty string');
+  }
+  if (typeof port !== 'number' || port < 1 || port > 65535) {
+    throw new Error(`Health client: port must be a valid port number (1-65535), got ${port}`);
+  }
+  if (typeof timeout !== 'number' || timeout <= 0) {
+    throw new Error(`Health client: timeout must be a positive number, got ${timeout}`);
+  }
 
   return new Promise((resolve, reject) => {
     const requestOptions = {
@@ -60,7 +71,15 @@ export async function fetchHealthReport(options: HealthClientOptions = {}): Prom
         }
 
         try {
-          const report: HealthReport = JSON.parse(data);
+          const parsed = JSON.parse(data);
+          
+          // Basic type guard to validate the response structure
+          if (!parsed || typeof parsed !== 'object' || !parsed.status || !Array.isArray(parsed.agents)) {
+            reject(new Error('Health server returned invalid response structure'));
+            return;
+          }
+          
+          const report: HealthReport = parsed;
           resolve(report);
         } catch (error) {
           reject(new Error(`Failed to parse health report: ${error instanceof Error ? error.message : String(error)}`));

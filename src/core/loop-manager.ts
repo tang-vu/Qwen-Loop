@@ -73,7 +73,7 @@ export class LoopManager implements ILoopManager {
         // Generate and enqueue initial tasks
         const tasks = this.selfTaskGenerator.generateTasks(analysis);
         for (const taskDesc of tasks) {
-          this.addTask(taskDesc.description, taskDesc.priority, { category: taskDesc.category, selfGenerated: true });
+          this.addTask(taskDesc.description, taskDesc.priority, { category: (taskDesc as any).metadata?.category, selfGenerated: true });
         }
         logger.info(`✨ Generated initial tasks`, { 
           operation: 'loop.init',
@@ -220,8 +220,11 @@ export class LoopManager implements ILoopManager {
    * @throws Error if description is empty or whitespace-only
    */
   addTask(description: string, priority: TaskPriority = TaskPriority.MEDIUM, metadata?: Record<string, unknown>): Task {
-    if (!description || description.trim().length === 0) {
-      throw new Error('Task description cannot be empty or whitespace-only');
+    if (typeof description !== 'string' || description.trim().length === 0) {
+      throw new Error('Task description must be a non-empty string');
+    }
+    if (typeof priority !== 'string' || !Object.values(TaskPriority).includes(priority)) {
+      throw new Error(`Invalid task priority: "${priority}". Must be one of: ${Object.values(TaskPriority).join(', ')}`);
     }
 
     const task: Task = {

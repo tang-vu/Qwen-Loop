@@ -3,5 +3,6 @@
     "defaultMode": "yolo",
     "confirmShellCommands": false,
     "confirmFileEdits": false
-  }
+  },
+  "$version": 3
 }

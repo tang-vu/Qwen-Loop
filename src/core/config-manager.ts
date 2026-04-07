@@ -13,7 +13,7 @@ const DEFAULT_CONFIG: Partial<LoopConfig> = {
   enableAutoStart: false,
   maxLoopIterations: 0, // 0 = unlimited
   enableSelfTaskGeneration: true
-};
+} as const;
 
 /**
  * Manages loading, saving, and validating Qwen Loop configuration.
@@ -56,18 +56,20 @@ export class ConfigManager {
     if (existsSync(this.configPath)) {
       try {
         const configData = readFileSync(this.configPath, 'utf-8');
-        const config = JSON.parse(configData);
+        const parsed = JSON.parse(configData);
 
-        logger.debugOnce(`📄 Configuration loaded`, {
-          operation: 'config.load',
-          configPath: this.configPath
-        });
+        // Type guard: validate parsed is an object
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('Configuration file must contain a JSON object');
+        }
+
+        logger.debug(`Configuration loaded from ${this.configPath}`);
         this.configLoadedFromFile = true;
 
         return {
           ...DEFAULT_CONFIG,
-          ...config,
-          agents: config.agents || []
+          ...parsed,
+          agents: Array.isArray(parsed.agents) ? parsed.agents : []
         } as LoopConfig;
       } catch (error) {
         logger.error(`❌ Failed to load configuration`, {
@@ -96,14 +98,15 @@ export class ConfigManager {
 
   private getDefaultConfig(): LoopConfig {
     return {
-      ...DEFAULT_CONFIG,
       agents: [],
-      maxConcurrentTasks: DEFAULT_CONFIG.maxConcurrentTasks!,
-      loopInterval: DEFAULT_CONFIG.loopInterval!,
-      maxRetries: DEFAULT_CONFIG.maxRetries!,
-      workingDirectory: DEFAULT_CONFIG.workingDirectory!,
-      logLevel: DEFAULT_CONFIG.logLevel!,
-      enableAutoStart: DEFAULT_CONFIG.enableAutoStart!
+      maxConcurrentTasks: DEFAULT_CONFIG.maxConcurrentTasks ?? 3,
+      loopInterval: DEFAULT_CONFIG.loopInterval ?? 5000,
+      maxRetries: DEFAULT_CONFIG.maxRetries ?? 3,
+      workingDirectory: DEFAULT_CONFIG.workingDirectory ?? process.cwd(),
+      logLevel: DEFAULT_CONFIG.logLevel ?? 'info',
+      enableAutoStart: DEFAULT_CONFIG.enableAutoStart ?? false,
+      maxLoopIterations: DEFAULT_CONFIG.maxLoopIterations ?? 0,
+      enableSelfTaskGeneration: DEFAULT_CONFIG.enableSelfTaskGeneration ?? true
     };
   }
 
@@ -160,11 +163,11 @@ export class ConfigManager {
    * the result to the configuration file. Updates are applied shallowly.
    *
    * @param updates - Partial configuration object to merge with current config
-   * @throws Error if saving the configuration fails
+   * @throws Error if saving the configuration fails or updates is invalid
    */
   updateConfig(updates: Partial<LoopConfig>): void {
-    if (!updates || typeof updates !== 'object') {
-      throw new Error('Configuration updates must be a valid object');
+    if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+      throw new Error('Configuration updates must be a valid object, not an array or primitive');
     }
     this.config = {
       ...this.config,

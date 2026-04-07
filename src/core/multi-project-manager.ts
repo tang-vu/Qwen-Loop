@@ -379,6 +379,8 @@ export class MultiProjectManager {
    *
    * Handles errors gracefully by logging them and advancing to the next project
    * rather than halting the entire multi-project loop.
+   *
+   * @throws Does not throw; logs errors and advances to next project on failure
    */
   private async processCurrentProject(): Promise<void> {
     if (!this.isRunning || this.projectNames.length === 0) {
